@@ -1,0 +1,31 @@
+# GitHub Project OS
+
+> An engineering operating system for GitHub-native, AI-agent-driven development.
+
+A reusable, opinionated **template repository** for solo developers and small teams (1–3 people) who run their entire engineering process on GitHub — issues, projects, releases, CI, governance — with AI coding agents as first-class collaborators.
+
+This is **not** a language or framework starter. It is the layer underneath: conventions, governance, automation, and reusable knowledge that work with any tech stack.
+
+## What you get
+
+- **Governance as code** — declarative labels, issue forms that set native issue types, a metadata single-home contract (`.github/PROJECT_FIELDS.md`), branch ruleset, PR template with a validation ladder.
+- **AI collaboration layer** — a canonical `AGENTS.md` hub (Claude, Gemini, Copilot and others all point to it), an agent work queue convention (`agent-ok`), and session-handoff rules that keep context from rotting.
+- **Skills** — focused, vendor-neutral knowledge modules under `skills/` that both humans and agents load on demand: issue writing, PR standards, release management, ADRs, anti-patterns, and more.
+- **Automation without sprawl** — a small set of workflows (CI, issue labeling, link maintenance, release PRs) that call `make` targets, so you customize the Makefile and never touch the workflows.
+- **A bootstrap script** — `scripts/bootstrap.sh` applies everything a template can't ship as files: labels, milestone, GitHub Project fields, repo settings, branch ruleset.
+
+## Quick start
+
+1. Click **Use this template** and create your repository.
+2. Clone it, then run `scripts/bootstrap.sh` (requires the [GitHub CLI](https://cli.github.com/)) — it configures labels, Project, repo settings, and ruleset, then converts the repo from template mode to your project.
+3. Read `AGENTS.md`, wire your test suite into the `test` target in the `Makefile`, and start working from issues.
+
+Full setup guide (including manual, no-CLI steps): `docs/setup/bootstrap.md`.
+
+## Status
+
+Under active construction toward `v0.1.0`. Not yet ready for adoption — watch releases.
+
+## License
+
+[MIT](LICENSE)
