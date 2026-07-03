@@ -2,6 +2,9 @@
 
 > An engineering operating system for GitHub-native, AI-agent-driven development.
 
+[![CI](https://github.com/TzuH-Hsu/github-project-os/actions/workflows/ci.yml/badge.svg)](https://github.com/TzuH-Hsu/github-project-os/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A reusable, opinionated **template repository** for solo developers and small teams (1–3 people) who run their entire engineering process on GitHub — issues, projects, releases, CI, governance — with AI coding agents as first-class collaborators.
 
 This is **not** a language or framework starter. It is the layer underneath: conventions, governance, automation, and reusable knowledge that work with any tech stack.
@@ -21,6 +24,15 @@ This is **not** a language or framework starter. It is the layer underneath: con
 3. Read `AGENTS.md`, wire your test suite into the `test` target in the `Makefile`, and start working from issues.
 
 Full setup guide (including manual, no-CLI steps): `docs/setup/bootstrap.md`.
+
+## About the template itself
+
+- Why each file exists: [docs/template/architecture.md](docs/template/architecture.md)
+- Design principles: [docs/template/design-principles.md](docs/template/design-principles.md)
+- Pulling future template updates into your project: [docs/template/upgrading.md](docs/template/upgrading.md)
+- Decisions and rationale: [docs/adr/](docs/adr/README.md)
+
+Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Questions and problems go through [issues](https://github.com/TzuH-Hsu/github-project-os/issues).
 
 ## Status
 
