@@ -1,14 +1,14 @@
 # GitHub Project OS - make-target contract: CI workflows call these targets
 # and never contain logic of their own. L0 = lint (lint-docs, lint-actions,
 # lint-secrets, check). L1 = test. verify = L0+L1 (canonical pre-PR gate).
+# lint-docs-external is the weekly maintenance workflow's full link check;
+# it is intentionally excluded from lint/verify/ci-pr (CI-PR stays --offline).
 # Customize tool invocations HERE, not in .github/workflows/*.
 
 SHELL := /usr/bin/env bash
-.PHONY: help lint-docs lint-actions lint-secrets check lint test verify ci-pr
+.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr
 
 .DEFAULT_GOAL := help
-
-FIND_EXCLUDES := -not -path '*/node_modules/*' -not -path '*/.git/*'
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
@@ -20,9 +20,13 @@ lint-docs: ## Lint markdown and YAML, check internal links
 	@command -v markdownlint-cli2 >/dev/null 2>&1 || { echo "install: npm install -g markdownlint-cli2"; exit 1; }
 	@command -v yamllint >/dev/null 2>&1 || { echo "install: brew install yamllint (or pip install yamllint)"; exit 1; }
 	@command -v lychee >/dev/null 2>&1 || { echo "install: brew install lychee"; exit 1; }
-	markdownlint-cli2 $$(find . -name '*.md' $(FIND_EXCLUDES))
-	yamllint $$(find . \( -name '*.yml' -o -name '*.yaml' \) $(FIND_EXCLUDES))
-	lychee --offline $$(find . -name '*.md' $(FIND_EXCLUDES))
+	markdownlint-cli2 '**/*.md' '#node_modules'
+	yamllint .
+	lychee --offline --no-progress -- './**/*.md'
+
+lint-docs-external: ## Full external link check (weekly maintenance workflow; not run in CI-PR)
+	@command -v lychee >/dev/null 2>&1 || { echo "install: brew install lychee"; exit 1; }
+	lychee --config lychee.toml --no-progress -- './**/*.md'
 
 lint-actions: ## Lint GitHub Actions workflows
 	@command -v actionlint >/dev/null 2>&1 || { echo "install: brew install actionlint"; exit 1; }

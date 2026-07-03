@@ -29,15 +29,15 @@ jobs:
           node-version: lts/*
 
       - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2
+        run: npm install -g markdownlint-cli2@0.23.0
 
       - name: Install yamllint
         run: |
           set -euo pipefail
           if command -v pipx >/dev/null 2>&1; then
-            pipx install yamllint
+            pipx install yamllint==1.38.0
           else
-            python3 -m pip install --user yamllint
+            python3 -m pip install --user yamllint==1.38.0
           fi
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 

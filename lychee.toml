@@ -15,3 +15,5 @@ exclude = [
 ]
 
 exclude_all_private = true
+
+exclude_path = ["node_modules"]
