@@ -1,0 +1,67 @@
+name: Maintenance
+
+# Weekly docs-drift detector: runs the full external link check (unlike CI's
+# --offline pass) so dead links surface here instead of silently rotting.
+# Failures show up in the Actions tab and email the maintainer per GitHub's
+# default scheduled-workflow-failure notifications.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Monday 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  link-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install lychee
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd "$tmp"
+
+          verify_checksum() {
+            local asset="$1" checksums="$2" line hash
+            line="$(grep -F "$asset" "$checksums" || true)"
+            if [ -z "$line" ]; then
+              line="$(head -n 1 "$checksums")"
+            fi
+            hash="$(printf '%s\n' "$line" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
+            test -n "$hash"
+            printf '%s  %s\n' "$hash" "$asset" | sha256sum -c -
+          }
+
+          install_tar_binary() {
+            local repo="$1" tag="$2" asset="$3" checksums="$4" binary="$5"
+            local url="https://github.com/${repo}/releases/download/${tag}"
+            curl -fsSLO "$url/$asset"
+            curl -fsSLO "$url/$checksums"
+            verify_checksum "$asset" "$checksums"
+            local extract_dir="${tmp}/extract-${binary}"
+            mkdir -p "$extract_dir"
+            tar -xzf "$asset" -C "$extract_dir"
+            local found
+            found="$(find "$extract_dir" -type f -name "$binary" -print -quit)"
+            if [ -z "$found" ]; then
+              echo "::error::binary '$binary' not found in $asset" >&2
+              exit 1
+            fi
+            sudo install -m 0755 "$found" "/usr/local/bin/$binary"
+          }
+
+          install_tar_binary "lycheeverse/lychee" "lychee-v0.24.2" "lychee-x86_64-unknown-linux-gnu.tar.gz" "lychee-x86_64-unknown-linux-gnu.tar.gz.sha256" "lychee"
+
+      - name: Check external links
+        run: make lint-docs-external
