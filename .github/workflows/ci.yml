@@ -65,8 +65,16 @@ jobs:
             curl -fsSLO "$url/$asset"
             curl -fsSLO "$url/$checksums"
             verify_checksum "$asset" "$checksums"
-            tar -xzf "$asset" "$binary"
-            sudo install -m 0755 "$binary" "/usr/local/bin/$binary"
+            local extract_dir="${tmp}/extract-${binary}"
+            mkdir -p "$extract_dir"
+            tar -xzf "$asset" -C "$extract_dir"
+            local found
+            found="$(find "$extract_dir" -type f -name "$binary" -print -quit)"
+            if [ -z "$found" ]; then
+              echo "::error::binary '$binary' not found in $asset" >&2
+              exit 1
+            fi
+            sudo install -m 0755 "$found" "/usr/local/bin/$binary"
           }
 
           install_tar_binary "rhysd/actionlint" "v1.7.12" "actionlint_1.7.12_linux_amd64.tar.gz" "actionlint_1.7.12_checksums.txt" "actionlint"
