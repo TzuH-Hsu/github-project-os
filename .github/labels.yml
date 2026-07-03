@@ -5,6 +5,11 @@
 #
 # area:* labels are starter examples — adopters should rename to their own domains.
 #
+# Format (parsed by scripts/bootstrap.sh's awk-based parser — no yq
+# dependency): flat, unquoted, single-line `- name:` / `color:` /
+# `description:` entries only, in that order. No YAML quoting, no
+# multi-line block scalars, no inline comments after values.
+#
 
 labels:
   - name: type:chore
