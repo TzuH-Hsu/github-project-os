@@ -63,7 +63,21 @@ Load a skill only when its "load when" condition matches your current task.
 
 | Skill | Load when |
 | --- | --- |
-| _(index is wired as skills land — see `skills/README.md`)_ | _(catalog pending)_ |
+| [agent-workflow](skills/agent-workflow/SKILL.md) | An AI agent picks up, executes, or hands off repository work — queue, boundaries, audit. |
+| [anti-patterns](skills/anti-patterns/SKILL.md) | Reviewing repository health or designing process — named failure modes and their fixes. |
+| [context-handoff](skills/context-handoff/SKILL.md) | Pausing, resuming, or handing off work across sessions — handoff file discipline. |
+| [branch-and-commit](skills/branch-and-commit/SKILL.md) | Starting work — branch naming, Conventional Commits, issue linkage. |
+| [code-review](skills/code-review/SKILL.md) | Reviewing a PR or deciding whether to self-merge — tiny-team review practice. |
+| [pr-authoring](skills/pr-authoring/SKILL.md) | Opening or updating a pull request — structure, validation ladder, RISK lines. |
+| [adr-writing](skills/adr-writing/SKILL.md) | A decision needs a durable record — triggers, format, lifecycle. |
+| [docs-hygiene](skills/docs-hygiene/SKILL.md) | Adding or restructuring documentation — placement, linking, drift prevention. |
+| [labels-and-taxonomy](skills/labels-and-taxonomy/SKILL.md) | Adding, renaming, or retiring labels — taxonomy governance. |
+| [issue-writing](skills/issue-writing/SKILL.md) | Creating or triaging an issue — forms, metadata contract, acceptance criteria. |
+| [milestone-planning](skills/milestone-planning/SKILL.md) | Planning releases or process phases — milestone discipline and scope control. |
+| [github-actions-hygiene](skills/github-actions-hygiene/SKILL.md) | Writing or reviewing GitHub Actions workflows — security and maintainability rules. |
+| [incident-response](skills/incident-response/SKILL.md) | Something broke — triage, fix-forward, postmortem-lite. |
+| [validation-ladder](skills/validation-ladder/SKILL.md) | Choosing how much validation a change needs — ladder levels, stages, extensions. |
+| [release-management](skills/release-management/SKILL.md) | Cutting a release or changing release cadence — release-please flow and alternatives. |
 
 ## Pointers
 
