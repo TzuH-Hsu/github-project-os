@@ -1,0 +1,26 @@
+# Dependabot configuration
+#
+# Template repo only automates its own workflow dependencies.
+# Adopters should add language-specific ecosystems here.
+#
+# See: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+#
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 5
+    # Adopters: add npm, python, go, etc. as needed
+    # - package-ecosystem: npm
+    #   directory: "/"
+    #   schedule:
+    #     interval: weekly
+    #     day: monday
