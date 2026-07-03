@@ -18,6 +18,17 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 | Dependencies | **Native issue relationships** | GitHub blocked-by / blocking |
 | Epic membership | **Native sub-issues** | parent issue with sub-issues; no `epic:*` labels |
 
+## Personal accounts
+
+Native issue types require an organization — on personal-account repos the
+coarse Type row above has no native home (`repos/{repo}/issue-types` 404s).
+The issue form used at creation (bug/feature/task) still captures intent,
+but GitHub silently ignores its `type:` key with no org to back it. Adopters
+on personal accounts who need queryable coarse type may extend the `type:*`
+labels with `bug`/`feature` as the Type home instead — this is still
+single-home: labels become the *one* home for Type when native types are
+unavailable, never both at once.
+
 ## Rules
 
 1. **One home per attribute.** Adding a Project field that mirrors a label (or vice versa) is a contract violation — remove one.

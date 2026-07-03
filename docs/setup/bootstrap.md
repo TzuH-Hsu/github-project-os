@@ -51,6 +51,8 @@ Manual: **Organization settings → Repository → Issue types** (an
 organization account is required — personal accounts don't expose native
 issue types). If unavailable, the issue forms' `type:` key is silently
 ignored by GitHub; the form still works, it just won't set a native type.
+On personal-account repos, see the "Personal accounts" note in
+`.github/PROJECT_FIELDS.md` for the label-based fallback.
 
 ### 3. Milestone
 

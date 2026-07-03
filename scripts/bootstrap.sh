@@ -289,19 +289,43 @@ $parsed
 EOF
 
   # Find repo labels not declared in labels.yml (prune candidates).
-  local existing_names extra_names
+  #
+  # Tool-managed labels: exclude anything matching `autorelease:*` from
+  # pruning. These are release-please's own PR-state labels (e.g.
+  # `autorelease: pending`, `autorelease: tagged`) — release-please creates
+  # and manages them itself as part of its release-PR lifecycle, they are
+  # never declared in .github/labels.yml, and deleting them breaks
+  # release-please's state tracking. A live dogfood run pruned
+  # `autorelease: pending` here and it had to be recreated; without this
+  # exclusion, every bootstrap re-run would delete it again.
+  local existing_names extra_names skipped_managed
   existing_names="$(gh label list --repo "$REPO" --limit 200 --json name -q '.[].name' 2>/dev/null || true)"
   extra_names=""
+  skipped_managed=""
   if [ -n "$existing_names" ]; then
     while IFS= read -r existing; do
       [ -n "$existing" ] || continue
       if ! printf '%s\n' "$declared_names" | grep -qxF "$existing"; then
-        extra_names="${extra_names}${existing}
+        case "$existing" in
+          autorelease:*)
+            skipped_managed="${skipped_managed}${existing}
 "
+            ;;
+          *)
+            extra_names="${extra_names}${existing}
+"
+            ;;
+        esac
       fi
     done <<EOF
 $existing_names
 EOF
+  fi
+
+  if [ -n "$skipped_managed" ]; then
+    printf '%s\n' "$skipped_managed" | sed '/^$/d' | while IFS= read -r managed; do
+      skip "prune candidate '${managed}' (tool-managed)"
+    done
   fi
 
   if [ -n "$extra_names" ]; then
@@ -348,14 +372,24 @@ EOF
 phase_issue_types() {
   doing "Phase 2: native issue types"
 
+  # Check the gh exit code explicitly instead of relying on stdout
+  # emptiness: on an HTTP error (e.g. the guaranteed 404 on personal-account
+  # repos) `gh api` prints the raw JSON error body to STDOUT — only the
+  # one-line summary goes to stderr — so a plain `2>/dev/null || true`
+  # capture would hold the error body as if it were data and never reach
+  # the unavailable branch below.
   local types
-  types="$(gh api "repos/${REPO}/issue-types" --jq '.[].name' 2>/dev/null || true)"
+  if ! types="$(gh api "repos/${REPO}/issue-types" --jq '.[].name' 2>/dev/null)"; then
+    types=""
+  fi
 
   if [ -z "$types" ]; then
-    warn "native issue types unavailable (endpoint 404s on some plans/orgs)"
-    warn "issue forms' 'type:' key will be silently ignored by GitHub"
-    warn "consider enabling issue types in your org/repo settings"
-    manual "Enable native issue types (org settings) so issue forms' type: key takes effect"
+    warn "repos/${REPO}/issue-types returned 404/empty"
+    warn "native issue types are an ORGANIZATION-only GitHub feature:"
+    warn "  - on an org repo: enable/verify Bug/Feature/Task in org settings (Organization settings -> Repository -> Issue types)"
+    warn "  - on a PERSONAL account: this feature does not exist — issue forms' 'type:' key is silently ignored"
+    warn "  see .github/PROJECT_FIELDS.md for the documented fallback on personal accounts"
+    manual "Org repos: enable/verify native Bug/Feature/Task issue types in org settings. Personal accounts: the feature does not exist — see the 'Personal accounts' note in .github/PROJECT_FIELDS.md for the fallback"
     record_phase "2. Issue types" "warn"
     return
   fi
@@ -385,8 +419,13 @@ phase_milestone() {
 
   # state=all: milestones default to state=open-only on this endpoint, which
   # would miss a closed v0.1.0 and attempt to recreate it.
+  # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON
+  # error body to stdout, so `|| true` would leave error text in $existing
+  # (same failure mode as phase 2's issue-types check).
   local existing
-  existing="$(gh api "repos/${REPO}/milestones?state=all" --jq '.[].title' 2>/dev/null || true)"
+  if ! existing="$(gh api "repos/${REPO}/milestones?state=all" --jq '.[].title' 2>/dev/null)"; then
+    existing=""
+  fi
 
   if printf '%s\n' "$existing" | grep -qxF "v0.1.0"; then
     ok "milestone v0.1.0 already exists"
@@ -565,8 +604,13 @@ phase_ruleset() {
     return
   fi
 
+  # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON
+  # error body to stdout, so `|| true` would leave error text in $existing
+  # (same failure mode as phase 2's issue-types check).
   local existing
-  existing="$(gh api "repos/${REPO}/rulesets" --jq '.[].name' 2>/dev/null || true)"
+  if ! existing="$(gh api "repos/${REPO}/rulesets" --jq '.[].name' 2>/dev/null)"; then
+    existing=""
+  fi
 
   if printf '%s\n' "$existing" | grep -qxF "main-branch-protection"; then
     ok "ruleset 'main-branch-protection' already exists — rulesets are create-once, this run will NOT sync changes; delete it on GitHub (Settings → Rules → Rulesets) and re-run to update"
