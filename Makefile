@@ -1,0 +1,50 @@
+# GitHub Project OS - make-target contract: CI workflows call these targets
+# and never contain logic of their own. L0 = lint (lint-docs, lint-actions,
+# lint-secrets, check). L1 = test. verify = L0+L1 (canonical pre-PR gate).
+# Customize tool invocations HERE, not in .github/workflows/*.
+
+SHELL := /usr/bin/env bash
+.PHONY: help lint-docs lint-actions lint-secrets check lint test verify ci-pr
+
+.DEFAULT_GOAL := help
+
+FIND_EXCLUDES := -not -path '*/node_modules/*' -not -path '*/.git/*'
+
+help: ## Show this help
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage: make \033[36m<target>\033[0m\n\n"} \
+	/^[a-zA-Z0-9_-]+:.*##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 }' \
+	$(MAKEFILE_LIST)
+	@echo ""
+
+lint-docs: ## Lint markdown and YAML, check internal links
+	@command -v markdownlint-cli2 >/dev/null 2>&1 || { echo "install: npm install -g markdownlint-cli2"; exit 1; }
+	@command -v yamllint >/dev/null 2>&1 || { echo "install: brew install yamllint (or pip install yamllint)"; exit 1; }
+	@command -v lychee >/dev/null 2>&1 || { echo "install: brew install lychee"; exit 1; }
+	markdownlint-cli2 $$(find . -name '*.md' $(FIND_EXCLUDES))
+	yamllint $$(find . \( -name '*.yml' -o -name '*.yaml' \) $(FIND_EXCLUDES))
+	lychee --offline $$(find . -name '*.md' $(FIND_EXCLUDES))
+
+lint-actions: ## Lint GitHub Actions workflows
+	@command -v actionlint >/dev/null 2>&1 || { echo "install: brew install actionlint"; exit 1; }
+	actionlint
+
+lint-secrets: ## Scan for committed secrets
+	@command -v gitleaks >/dev/null 2>&1 || { echo "install: brew install gitleaks"; exit 1; }
+	gitleaks detect --no-banner
+
+check: ## Run repo self-consistency scripts (skips scripts not yet added)
+	@if [ -x scripts/check-skills.sh ]; then scripts/check-skills.sh; else echo "skip: scripts/check-skills.sh not present yet"; fi
+	@if [ -x scripts/check-local-md.sh ]; then scripts/check-local-md.sh; else echo "skip: scripts/check-local-md.sh not present yet"; fi
+
+lint: lint-docs lint-actions lint-secrets check ## L0 - aggregate all lint/consistency checks
+
+test: ## L1 - placeholder test suite (adopters wire real tests here)
+	@echo "============================================================"
+	@echo " NOTICE: 'test' is a placeholder. No test suite is wired up."
+	@echo " Adopters: edit the 'test' target in this Makefile to run"
+	@echo " your unit tests (e.g. npm test, pytest, go test ./...)."
+	@echo "============================================================"
+
+verify: lint test ## L0+L1 - canonical local pre-PR gate
+
+ci-pr: verify ## Alias of verify; what ci.yml runs
