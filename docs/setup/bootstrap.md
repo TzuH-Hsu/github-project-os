@@ -104,6 +104,8 @@ GitHub Actions is not permitted to create or approve pull requests.
 Imports `.github/rulesets/main-branch.json` as a repository ruleset named
 `main-branch-protection`, if a ruleset with that name doesn't already exist.
 
+**Admin bypass note:** The ruleset is configured with `bypass_mode: always`, which allows repository administrators to push directly to `main` without enforcement — they see a bypass notice instead of a block. This protects against non-admin pushes and accidental force-push/deletion. Solo maintainers who want the rules to bind their own pushes too should remove the admin bypass actor in **GitHub Settings → Rules → Rulesets → main-branch-protection → Bypass actors**.
+
 Manual: **Settings → Rules → Rulesets → New ruleset → Import a ruleset**,
 select `.github/rulesets/main-branch.json`. Review the imported rules (branch
 deletion/force-push blocked, PR required, `ci` status check required) and
@@ -148,6 +150,8 @@ so subsequent releases follow normal Conventional Commit version bumps.
 
 The script does not run `git commit`. Review `git status` and commit
 yourself: `git commit -m "chore: bootstrap repository"`.
+
+**Note on first release:** The `chore: bootstrap repository` commit does not trigger a release PR. release-please only reacts to releasable Conventional Commit types (`feat`, `fix`, or commits with `!` / `BREAKING CHANGE`); the first `feat:` or `fix:` commit after bootstrap triggers the v0.1.0 release PR. To cut a release immediately, add a `Release-As: 0.1.0` footer to the commit message or manually trigger release-please.
 
 ## Troubleshooting
 

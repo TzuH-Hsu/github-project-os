@@ -3,6 +3,7 @@
 # lint-secrets, check). L1 = test. verify = L0+L1 (canonical pre-PR gate).
 # lint-docs-external is the weekly maintenance workflow's full link check;
 # it is intentionally excluded from lint/verify/ci-pr (CI-PR stays --offline).
+# CHANGELOG.md is excluded from markdownlint: release-please generates it.
 # Customize tool invocations HERE, not in .github/workflows/*.
 
 SHELL := /usr/bin/env bash
@@ -20,7 +21,7 @@ lint-docs: ## Lint markdown and YAML, check internal links
 	@command -v markdownlint-cli2 >/dev/null 2>&1 || { echo "install: npm install -g markdownlint-cli2"; exit 1; }
 	@command -v yamllint >/dev/null 2>&1 || { echo "install: brew install yamllint (or pip install yamllint)"; exit 1; }
 	@command -v lychee >/dev/null 2>&1 || { echo "install: brew install lychee"; exit 1; }
-	markdownlint-cli2 '**/*.md' '#node_modules'
+	markdownlint-cli2 '**/*.md' '#node_modules' '#CHANGELOG.md'
 	yamllint .
 	lychee --offline --no-progress -- './**/*.md'
 
