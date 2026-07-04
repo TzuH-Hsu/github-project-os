@@ -1,8 +1,14 @@
-# Project views setup (manual)
+# Project views setup
 
-GitHub's REST/GraphQL API cannot edit the default `Status` field's options
-or create Project views, so this one-time setup is done by hand after
-`scripts/bootstrap.sh` creates the Project and its `Effort` field.
+GitHub's REST/GraphQL API cannot create Project views, so that part of this
+setup is always done by hand after `scripts/bootstrap.sh` creates the
+Project and its `Effort` field. The `Status` field's options, however, are
+set automatically (via the GraphQL `updateProjectV2Field` mutation) when
+`scripts/bootstrap.sh` phase 4 creates the Project itself — you only need
+section 1 below if the project pre-existed the bootstrap run, if its
+options were customized (bootstrap warns and skips in both cases), or if
+you're setting things up by hand for some other reason (e.g. you ran with
+`--skip-project`).
 
 Mirror the single-home contract in `.github/PROJECT_FIELDS.md`: this Project
 carries exactly two custom fields, `Status` and `Effort`. Do **not** add
@@ -10,19 +16,33 @@ carries exactly two custom fields, `Status` and `Effort`. Do **not** add
 native issue type, and a mirrored field is a contract violation (see
 `docs/adr/ADR-0003-metadata-single-home.md`).
 
-## 1. Set Status field options
+## 1. Set Status field options (manual fallback)
+
+`scripts/bootstrap.sh` sets this automatically only on a Project that the
+same bootstrap run just created (a fresh board with no items, its Status
+still holding GitHub's defaults `Todo`/`In Progress`/`Done`). It
+deliberately never touches a pre-existing project's Status field — even
+when the options look like the untouched defaults — because rewriting
+options assigns new option IDs and would silently orphan the Status values
+of any items already on the board. The same hands-off rule applies when
+the options were customized. In those cases bootstrap prints a WARN and a
+MANUAL note, and you finish the job here:
 
 1. Open the Project (`<repo> board`) → **⋯ (top right) → Settings**, or
    click the `Status` column header → **Edit field**.
-2. Replace the default options (`Todo` / `In Progress` / `Done`) with:
+2. Replace the current options with:
    - `Backlog`
    - `Ready`
    - `In Progress`
    - `In Review`
    - `Blocked`
    - `Done`
-3. Delete any leftover default options that aren't in the list above.
+3. Delete any leftover options that aren't in the list above.
 4. Pick colors if you want them — not required, purely visual.
+
+If you skipped Project setup entirely (`--skip-project`) and are creating
+the Project by hand, do this step after creating the `Status` field's
+default options (every Project v2 board ships with one).
 
 ## 2. Confirm the Effort field
 
