@@ -36,7 +36,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Questions and 
 
 ## Status
 
-Under active construction toward `v0.1.0`. Not yet ready for adoption — watch releases.
+`v0.1.0` is released and the template is verified end to end (create from template → bootstrap → CI → release cut). It is usable today; conventions may still evolve before `v1.0`, so watch [releases](https://github.com/TzuH-Hsu/github-project-os/releases) for changes.
 
 ## License
 
