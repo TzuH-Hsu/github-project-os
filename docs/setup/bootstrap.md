@@ -65,16 +65,39 @@ Manual: **Issues → Milestones → New milestone**, title `v0.1.0`.
 ### 4. Project
 
 Creates a GitHub Project (v2) titled `<repo name> board`, links it to the
-repository, and adds an `Effort` single-select field (`S`/`M`/`L`). Re-running
-is safe: an existing link is left as-is and the `Effort` field is only
-created if a field with that name isn't already present.
+repository, adds an `Effort` single-select field (`S`/`M`/`L`), and — on the
+project this run itself just created — sets the `Status` field's options to
+the single-home contract's target set
+(`Backlog`/`Ready`/`In Progress`/`In Review`/`Blocked`/`Done`) via the
+GraphQL `updateProjectV2Field` mutation. Re-running is safe: an existing
+link is left as-is, the `Effort` field is only created if a field with that
+name isn't already present, and Status options are never rewritten on a
+project that pre-existed the run.
+
+**Status options — automatic only on a just-created project:** the script
+reads the current Status option names (in order) via `gh project
+field-list`:
+
+- Already the target set → prints a skip line, no mutation (idempotent).
+- Project created by this same bootstrap run (its Status necessarily still
+  holds GitHub's defaults `Todo`/`In Progress`/`Done`, and a just-created
+  board cannot have items yet) → rewrites the options to the target set via
+  `updateProjectV2Field(singleSelectOptions:...)`.
+- Project pre-existed the run — **even if its options look like the
+  pristine defaults** — or the options were customized → the script leaves
+  the field alone and prints a WARN + a MANUAL note. Rewriting options
+  assigns new option IDs, which would silently orphan the Status values of
+  any items already on the board, so auto-rewrite only ever fires on a
+  board this run created.
 
 Manual: **Your profile → Projects → New project**, title it `<repo> board`,
 then **⋯ → Link a repository** to attach it. Add a single-select field named
-`Effort` with options `S`, `M`, `L` via **+ (add field)** on the board.
+`Effort` with options `S`, `M`, `L` via **+ (add field)** on the board. If
+bootstrap warned about a pre-existing project or custom Status options (or
+you want to set them by hand), see `docs/setup/project-views.md`.
 
-The script cannot create the `Status` field's non-default options or any
-views — see `docs/setup/project-views.md` for that (manual, one-time) setup.
+The script still cannot create Project views — that remains a manual,
+one-time step; see `docs/setup/project-views.md`.
 
 ### 5. Repo settings
 
@@ -179,6 +202,6 @@ prompt.
 
 ## See also
 
-- `docs/setup/project-views.md` — manual Projects v2 Status options and views
+- `docs/setup/project-views.md` — manual Project views setup, plus the manual Status-options fallback for when bootstrap warns
 - `.github/PROJECT_FIELDS.md` — the metadata single-home contract this setup enforces
 - `docs/adr/ADR-0002-release-flow.md` — why release-please needs the Actions PR permission

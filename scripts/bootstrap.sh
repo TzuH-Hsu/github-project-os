@@ -455,6 +455,57 @@ phase_milestone() {
 
 # --- Phase 4 — Project ---
 
+# Target Status options for a fresh project (single-home contract —
+# .github/PROJECT_FIELDS.md). Order matters: it's compared positionally
+# against both the live field and the pristine-default set below.
+STATUS_TARGET_OPTIONS='Backlog
+Ready
+In Progress
+In Review
+Blocked
+Done'
+
+# GitHub's out-of-the-box Status options on a brand-new Project v2 board.
+# Only a field still holding exactly this set is safe to overwrite
+# automatically — anything else means a human already customized it.
+STATUS_DEFAULT_OPTIONS='Todo
+In Progress
+Done'
+
+# options_match <a> <b> — true if two newline-delimited option lists are
+# identical, including order. Pure string comparison, no gh/network calls,
+# so this is unit-testable in isolation (see the harness invoked from the
+# validation step for this change).
+options_match() {
+  [ "$1" = "$2" ]
+}
+
+# status_options_decision <project_already_existed: 0|1> <current_options>
+# — prints the action phase_project must take for the Status field:
+#   target-skip        options already equal the target set (idempotent)
+#   rewrite            project was created by THIS bootstrap run and still
+#                      holds the pristine defaults — the only state safe to
+#                      auto-rewrite (a just-created board cannot have items)
+#   preexisting-manual project pre-existed this run: never auto-rewrite,
+#                      even when its options look like the pristine
+#                      defaults — it may already carry items whose Status
+#                      values a rewrite would orphan (options get new IDs)
+#   custom-manual      options are neither target nor defaults — a human
+#                      customized them; hands off
+# Pure string logic, no gh/network calls — unit-testable in isolation.
+status_options_decision() {
+  local already_existed="$1" opts="$2"
+  if options_match "$opts" "$STATUS_TARGET_OPTIONS"; then
+    printf 'target-skip'
+  elif ! options_match "$opts" "$STATUS_DEFAULT_OPTIONS"; then
+    printf 'custom-manual'
+  elif [ "$already_existed" -eq 0 ]; then
+    printf 'rewrite'
+  else
+    printf 'preexisting-manual'
+  fi
+}
+
 phase_project() {
   if [ "$SKIP_PROJECT" -eq 1 ]; then
     skip "Phase 4: Project (--skip-project)"
@@ -532,7 +583,76 @@ phase_project() {
     ok "Effort field created (S/M/L)"
   fi
 
-  manual "GitHub's API cannot edit the default Status field options or create views — follow docs/setup/project-views.md (Status: Backlog/Ready/In Progress/In Review/Blocked/Done + 3 views)"
+  # Status options — set the single-home contract's target set
+  # (Backlog/Ready/In Progress/In Review/Blocked/Done) via
+  # updateProjectV2Field(singleSelectOptions:...). Auto-rewrite is only
+  # safe on a project THIS run just created (still on pristine defaults,
+  # guaranteed item-free): rewriting options assigns new option IDs, so on
+  # any pre-existing project — even one whose options happen to look like
+  # the untouched defaults — it could silently orphan the Status values of
+  # items already on the board. Everything except the just-created case is
+  # therefore skip (already target) or WARN + MANUAL (pre-existing or
+  # customized). Decision logic lives in status_options_decision above.
+  #
+  # Skipped entirely for a project just created under --dry-run: its
+  # "project_number" is the "DRY-RUN" placeholder (no real project exists
+  # yet to query), matching the same fall-through the Effort field-create
+  # step above relies on.
+  if [ "$project_number" = "DRY-RUN" ]; then
+    printf '%s[dry-run]%s would set Status options to the target set (Backlog/Ready/In Progress/In Review/Blocked/Done) on the newly created project\n' "$C_YELLOW" "$C_RESET"
+  else
+    local status_field_id status_options
+    status_field_id="$(gh project field-list "$project_number" --owner "$OWNER" --format json --jq '.fields[] | select(.name=="Status") | .id' 2>/dev/null || true)"
+
+    if [ -z "$status_field_id" ]; then
+      warn "could not determine the Status field id on project '${title}' — skipping Status options"
+      manual "Verify the Status field on project '${title}' has options Backlog/Ready/In Progress/In Review/Blocked/Done; set them by hand if not — see docs/setup/project-views.md"
+    else
+      status_options="$(gh project field-list "$project_number" --owner "$OWNER" --format json --jq '.fields[] | select(.name=="Status") | .options[].name' 2>/dev/null || true)"
+
+      case "$(status_options_decision "$project_already_existed" "$status_options")" in
+        target-skip)
+          ok "Status options already match the target set — skip"
+          ;;
+        rewrite)
+          # Single-quoted on purpose: $fieldId inside is a GraphQL variable
+          # reference for gh to substitute via -f fieldId=..., not a shell
+          # variable to expand here.
+          # shellcheck disable=SC2016
+          run_or_dry gh api graphql -f query='
+            mutation($fieldId: ID!) {
+              updateProjectV2Field(input: {
+                fieldId: $fieldId,
+                singleSelectOptions: [
+                  {name: "Backlog", color: GRAY, description: "Not committed yet"},
+                  {name: "Ready", color: GREEN, description: "Scoped and claimable (agent-ok issues are self-service here)"},
+                  {name: "In Progress", color: YELLOW, description: "Being worked"},
+                  {name: "In Review", color: ORANGE, description: "PR open, awaiting review"},
+                  {name: "Blocked", color: RED, description: "Waiting on dependency or decision"},
+                  {name: "Done", color: PURPLE, description: "Merged / completed"}
+                ]
+              }) {
+                projectV2Field {
+                  ... on ProjectV2SingleSelectField { id }
+                }
+              }
+            }' -f fieldId="$status_field_id" \
+            || { fail "gh api graphql updateProjectV2Field failed"; record_phase "4. Project" "fail"; return 1; }
+          ok "Status options set to Backlog/Ready/In Progress/In Review/Blocked/Done"
+          ;;
+        preexisting-manual)
+          warn "project '${title}' pre-existed this run — not rewriting its Status options (items may already reference them)"
+          manual "Project '${title}' pre-existed bootstrap — set its Status options to Backlog/Ready/In Progress/In Review/Blocked/Done by hand (see docs/setup/project-views.md)"
+          ;;
+        *)
+          warn "Status field on project '${title}' has custom options — not overwriting"
+          manual "Project '${title}' Status field has non-default options — edit it by hand to Backlog/Ready/In Progress/In Review/Blocked/Done (see docs/setup/project-views.md) if that's what you want"
+          ;;
+      esac
+    fi
+  fi
+
+  manual "GitHub's API cannot create views — follow docs/setup/project-views.md for the 3 views"
 
   record_phase "4. Project" "ok"
 }
