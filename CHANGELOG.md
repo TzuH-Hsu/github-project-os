@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.1.0...v0.2.0) (2026-07-04)
+
+
+### Features
+
+* bootstrap sets Project Status options via GraphQL on newly created projects ([#6](https://github.com/TzuH-Hsu/github-project-os/issues/6)) ([515f78a](https://github.com/TzuH-Hsu/github-project-os/commit/515f78ab646bd2644b80c4a0b69d09fc12e9fa58))
+
 ## 0.1.0 (2026-07-03)
 
 
