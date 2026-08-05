@@ -35,9 +35,16 @@ updates:
       # Reuse the declared taxonomy in .github/labels.yml instead of letting
       # Dependabot mint its own `dependencies`/`github_actions` labels —
       # undeclared labels are prune candidates for scripts/bootstrap.sh, so
-      # they would be deleted and re-created forever. See ADR-0003 and
-      # .github/PROJECT_FIELDS.md.
-      - type:chore
+      # they would be deleted and re-created forever. See ADR-0003.
+      #
+      # `area:ci` ONLY — deliberately no `type:*` subtype. Unlike `schedule:`,
+      # the `labels:` option DOES apply to security-update PRs as well
+      # (docs: dependabot-options-reference#labels, since we set no
+      # `target-branch`). A `type:chore` here would therefore mislabel an
+      # advisory-driven PR that belongs under `type:security`, making the
+      # metadata contract untrue and hiding real security work from
+      # `label:type:security` triage. Only add labels that are correct for
+      # BOTH version and security updates.
       - area:ci
     # Reviewers: Dependabot's `reviewers:` key is deprecated — use
     # .github/CODEOWNERS instead, which also covers human-authored PRs.
