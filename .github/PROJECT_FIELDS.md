@@ -7,7 +7,7 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 | Attribute | Home | Values / format |
 | --- | --- | --- |
 | Type (coarse) | **Native issue type** | `Bug` / `Feature` / `Task` — set by the issue form |
-| Type (subtype) | `type:*` **labels** | `chore` / `ops` / `docs` / `security` — Task subtypes only |
+| Type (subtype) | `type:*` **labels** | `chore` / `ops` / `docs` / `security` — Task subtypes; also applied to PRs that carry no issue of their own (e.g. Dependabot's, set in `dependabot.yml`) |
 | Priority | `priority:*` **labels** | `p0` critical / `p1` milestone-blocking / `p2` important / `p3` polish |
 | Area | `area:*` **labels** | starter set: `docs`, `skills`, `ci`, `governance` — rename to your domains |
 | Workflow status | **Project `Status` field** | `Backlog` / `Ready` / `In Progress` / `In Review` / `Blocked` / `Done` |

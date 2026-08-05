@@ -60,7 +60,9 @@ jobs:
             echo "Confirmation phrase did not match. Aborting."; exit 1; }
 ```
 
-Checksum verification, adapted from `.github/workflows/ci.yml`:
+Checksum verification, adapted from `scripts/install-ci-tools.sh` (which both
+`ci.yml` and `maintenance.yml` reach via `make ci-tools` — this logic used to be
+duplicated verbatim inside each workflow, which is what rule 1 prevents):
 
 ```bash
 verify_checksum() {
@@ -80,8 +82,9 @@ verify_checksum() {
 
 ## Related
 
-- `` `.github/workflows/ci.yml` `` — reference implementation of pinned actions, top-level `permissions: read`, concurrency group, `timeout-minutes`, and checksum-verified binary installs
-- `Makefile` — where all workflow logic actually lives (`lint`, `test`, `verify`, `ci-pr`)
+- `` `.github/workflows/ci.yml` `` — reference implementation of pinned actions, top-level `permissions: read`, concurrency group, `timeout-minutes`, and `persist-credentials: false`; also carries the header warning explaining why its `on:` block must never gain a path filter (the `ci` job is the only required status check)
+- `Makefile` — where all workflow logic actually lives (`lint`, `test`, `verify`, `ci-pr`, `ci-tools`)
+- `` `scripts/install-ci-tools.sh` `` — checksum-verified tool installs and the CI tool version pins, shared by `ci.yml` and `maintenance.yml`
 - `AGENTS.md` — "The Makefile is the only executable contract in this repository"
 - `` `skills/validation-ladder/SKILL.md` `` — what `make lint`/`make test` are expected to cover
 - `` `skills/release-management/SKILL.md` `` — the release-please workflow this hygiene applies to

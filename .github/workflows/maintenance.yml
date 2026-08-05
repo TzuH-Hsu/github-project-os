@@ -24,44 +24,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job only reads (lychee walks ./**/*.md). Default shallow clone
+          # is correct here — unlike ci.yml, nothing scans git history — and the
+          # token stays out of .git/config.
+          persist-credentials: false
 
+      # Shares scripts/install-ci-tools.sh with ci.yml, so the lychee version
+      # pin and checksum verification exist in exactly one place. This step was
+      # previously ~40 lines of shell duplicated verbatim from ci.yml.
       - name: Install lychee
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          cd "$tmp"
-
-          verify_checksum() {
-            local asset="$1" checksums="$2" line hash
-            line="$(grep -F "$asset" "$checksums" || true)"
-            if [ -z "$line" ]; then
-              line="$(head -n 1 "$checksums")"
-            fi
-            hash="$(printf '%s\n' "$line" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
-            test -n "$hash"
-            printf '%s  %s\n' "$hash" "$asset" | sha256sum -c -
-          }
-
-          install_tar_binary() {
-            local repo="$1" tag="$2" asset="$3" checksums="$4" binary="$5"
-            local url="https://github.com/${repo}/releases/download/${tag}"
-            curl -fsSLO "$url/$asset"
-            curl -fsSLO "$url/$checksums"
-            verify_checksum "$asset" "$checksums"
-            local extract_dir="${tmp}/extract-${binary}"
-            mkdir -p "$extract_dir"
-            tar -xzf "$asset" -C "$extract_dir"
-            local found
-            found="$(find "$extract_dir" -type f -name "$binary" -print -quit)"
-            if [ -z "$found" ]; then
-              echo "::error::binary '$binary' not found in $asset" >&2
-              exit 1
-            fi
-            sudo install -m 0755 "$found" "/usr/local/bin/$binary"
-          }
-
-          install_tar_binary "lycheeverse/lychee" "lychee-v0.24.2" "lychee-x86_64-unknown-linux-gnu.tar.gz" "lychee-x86_64-unknown-linux-gnu.tar.gz.sha256" "lychee"
+        run: make ci-tools TOOLS="lychee"
 
       - name: Check external links
         run: make lint-docs-external
