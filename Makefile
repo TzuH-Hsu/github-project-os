@@ -1,13 +1,14 @@
 # GitHub Project OS - make-target contract: CI workflows call these targets
 # and never contain logic of their own. L0 = lint (lint-docs, lint-actions,
 # lint-secrets, check). L1 = test. verify = L0+L1 (canonical pre-PR gate).
-# lint-docs-external is the weekly maintenance workflow's full link check;
-# it is intentionally excluded from lint/verify/ci-pr (CI-PR stays --offline).
+# lint-docs-external and check-tool-versions belong to the weekly maintenance
+# workflow and are intentionally excluded from lint/verify/ci-pr: both make
+# external network calls, and CI-PR stays offline and hermetic.
 # CHANGELOG.md is excluded from markdownlint: release-please generates it.
 # Customize tool invocations HERE, not in .github/workflows/*.
 
 SHELL := /usr/bin/env bash
-.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr ci-tools
+.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr ci-tools check-tool-versions
 
 .DEFAULT_GOAL := help
 
@@ -54,6 +55,9 @@ verify: lint test ## L0+L1 - canonical local pre-PR gate
 
 ci-pr: verify ## Alias of verify; what ci.yml runs
 
-ci-tools: ## Install checksum-verified CI tool binaries (CI only) - TOOLS="actionlint gitleaks lychee"
+ci-tools: ## Install pinned CI tools (CI only) - TOOLS="actionlint gitleaks lychee"
 	@test -n "$(TOOLS)" || { echo 'usage: make ci-tools TOOLS="actionlint gitleaks lychee"'; exit 1; }
 	scripts/install-ci-tools.sh $(TOOLS)
+
+check-tool-versions: ## Compare CI tool pins against upstream (weekly maintenance; makes network calls)
+	scripts/check-tool-versions.sh

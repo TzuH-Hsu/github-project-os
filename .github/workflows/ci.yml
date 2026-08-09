@@ -51,24 +51,13 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Install markdownlint-cli2
-        run: npm install -g markdownlint-cli2@0.23.0
-
-      - name: Install yamllint
-        run: |
-          set -euo pipefail
-          if command -v pipx >/dev/null 2>&1; then
-            pipx install yamllint==1.38.0
-          else
-            python3 -m pip install --user yamllint==1.38.0
-          fi
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      # Version pins and checksum verification live in
-      # scripts/install-ci-tools.sh, shared with maintenance.yml. This step was
-      # previously ~40 lines of shell duplicated verbatim in both workflows.
-      - name: Install release binaries
-        run: make ci-tools TOOLS="actionlint gitleaks lychee"
+      # Every tool version pin, plus the checksum verification, lives in
+      # scripts/install-ci-tools.sh (shared with maintenance.yml) so that
+      # `make check-tool-versions` has a single place to diff against upstream.
+      # This was three separate steps, one of them ~40 lines of shell duplicated
+      # verbatim in maintenance.yml.
+      - name: Install CI tools
+        run: make ci-tools TOOLS="markdownlint-cli2 yamllint actionlint gitleaks lychee"
 
       - name: Run CI
         run: make ci-pr

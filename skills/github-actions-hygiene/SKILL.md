@@ -26,6 +26,7 @@ Workflows are the highest-privilege, least-reviewed code in most repositories �
 7. **Destructive or irreversible dispatch workflows require a typed-confirmation guard** — the operator must type an exact phrase (e.g. the repo name) as a `workflow_dispatch` input, checked before anything destructive runs.
 8. **Checksum-verify any binary downloaded and installed in a workflow** (release tools, linters) — download the checksums file alongside the asset and verify before `chmod +x` / `install`.
 9. **Anti-sprawl**: a new workflow file needs a justification that no existing workflow already covers. This template's target set is four: CI (verification), issue labeling, link maintenance, release PRs. Adding a fifth is a deliberate decision, not a default — prefer adding a job or a `make` target to an existing workflow first.
+10. **Every pinned tool version lives in one file, and something watches it.** SHA-pinning actions (rule 3) only covers `uses:`. Dependabot reads manifests, so a version pinned inside a `run:` step or an install script is invisible to it and will rot silently — no alert, no PR, no signal at all. Keep those pins in a single file (`scripts/install-ci-tools.sh` here) and run a scheduled check that diffs them against upstream (`make check-tool-versions`, a step in the weekly maintenance workflow). A pin nobody is watching is a pin that stays put for years.
 
 ## How
 
@@ -84,7 +85,8 @@ verify_checksum() {
 
 - `` `.github/workflows/ci.yml` `` — reference implementation of pinned actions, top-level `permissions: read`, concurrency group, `timeout-minutes`, and `persist-credentials: false`; also carries the header warning explaining why its `on:` block must never gain a path filter (the `ci` job is the only required status check)
 - `Makefile` — where all workflow logic actually lives (`lint`, `test`, `verify`, `ci-pr`, `ci-tools`)
-- `` `scripts/install-ci-tools.sh` `` — checksum-verified tool installs and the CI tool version pins, shared by `ci.yml` and `maintenance.yml`
+- `` `scripts/install-ci-tools.sh` `` — checksum-verified tool installs and the single home for all five CI tool version pins, shared by `ci.yml` and `maintenance.yml`
+- `` `scripts/check-tool-versions.sh` `` — rule 10's watcher: diffs those pins against upstream weekly and fails on drift
 - `AGENTS.md` — "The Makefile is the only executable contract in this repository"
 - `` `skills/validation-ladder/SKILL.md` `` — what `make lint`/`make test` are expected to cover
 - `` `skills/release-management/SKILL.md` `` — the release-please workflow this hygiene applies to
