@@ -1,5 +1,23 @@
 name: CI
 
+# The `ci` job below is this repository's ONLY required status check
+# (.github/rulesets/main-branch.json -> required_status_checks context "ci").
+# Renaming the job key breaks every merge until the ruleset is updated to match.
+#
+# NEVER add a workflow-level `paths:`, `paths-ignore:`, or `branches:` filter to
+# `on.pull_request`. A filtered-out workflow does not run at all, so the `ci`
+# check is never created, and the PR parks forever on "Expected - waiting for
+# status to be reported" with no failing job to point at. The repo becomes
+# unmergeable and the cause is not visible in the Actions tab.
+#
+# Job-level `if:` is the opposite trap: a skipped job reports SUCCESS and
+# satisfies the required check, letting unverified code merge past the gate.
+# Neither mechanism belongs on this job.
+#
+# There is no minutes argument for either. The job runs in ~15s and bills as one
+# rounded-up minute whether it does work or not, and this is a public repo where
+# hosted runners are free. Skipping saves nothing and risks everything.
+
 on:
   pull_request:
   push:
@@ -21,7 +39,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # Full history: `make lint-secrets` runs `gitleaks detect`, which
+          # scans every commit, not just the tip. Do not shallow this.
           fetch-depth: 0
+          # This job only reads. Keeping the token out of .git/config denies it
+          # to every later step (and to any tool binary they install).
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -41,45 +64,11 @@ jobs:
           fi
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # Version pins and checksum verification live in
+      # scripts/install-ci-tools.sh, shared with maintenance.yml. This step was
+      # previously ~40 lines of shell duplicated verbatim in both workflows.
       - name: Install release binaries
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp"' EXIT
-          cd "$tmp"
-
-          verify_checksum() {
-            local asset="$1" checksums="$2" line hash
-            line="$(grep -F "$asset" "$checksums" || true)"
-            if [ -z "$line" ]; then
-              line="$(head -n 1 "$checksums")"
-            fi
-            hash="$(printf '%s\n' "$line" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
-            test -n "$hash"
-            printf '%s  %s\n' "$hash" "$asset" | sha256sum -c -
-          }
-
-          install_tar_binary() {
-            local repo="$1" tag="$2" asset="$3" checksums="$4" binary="$5"
-            local url="https://github.com/${repo}/releases/download/${tag}"
-            curl -fsSLO "$url/$asset"
-            curl -fsSLO "$url/$checksums"
-            verify_checksum "$asset" "$checksums"
-            local extract_dir="${tmp}/extract-${binary}"
-            mkdir -p "$extract_dir"
-            tar -xzf "$asset" -C "$extract_dir"
-            local found
-            found="$(find "$extract_dir" -type f -name "$binary" -print -quit)"
-            if [ -z "$found" ]; then
-              echo "::error::binary '$binary' not found in $asset" >&2
-              exit 1
-            fi
-            sudo install -m 0755 "$found" "/usr/local/bin/$binary"
-          }
-
-          install_tar_binary "rhysd/actionlint" "v1.7.12" "actionlint_1.7.12_linux_amd64.tar.gz" "actionlint_1.7.12_checksums.txt" "actionlint"
-          install_tar_binary "gitleaks/gitleaks" "v8.30.1" "gitleaks_8.30.1_linux_x64.tar.gz" "gitleaks_8.30.1_checksums.txt" "gitleaks"
-          install_tar_binary "lycheeverse/lychee" "lychee-v0.24.2" "lychee-x86_64-unknown-linux-gnu.tar.gz" "lychee-x86_64-unknown-linux-gnu.tar.gz.sha256" "lychee"
+        run: make ci-tools TOOLS="actionlint gitleaks lychee"
 
       - name: Run CI
         run: make ci-pr

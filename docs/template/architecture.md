@@ -15,7 +15,7 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `.github/labels.yml` | Labels as code; bootstrap re-run = sync | Edit alongside label changes; allowlist in `issue-labeler.yml` must match |
 | `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Sync option lists with `labels.yml` |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Validation ladder + RISK convention at point of use | Near zero |
-| `.github/workflows/ci.yml` | L0 gate; installs tools, runs `make ci-pr` | SHA-pin bumps via Dependabot |
+| `.github/workflows/ci.yml` | L0 gate; installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` | SHA-pin bumps via Dependabot |
 | `.github/workflows/issue-labeler.yml` | Form selections → labels (single-home preserving) | Allowlist sync with `labels.yml` |
 | `.github/workflows/maintenance.yml` | Weekly external link check — docs-drift detector | Near zero |
 | `.github/workflows/release-please.yml` + configs | Human-gated release automation (ADR-0002) | Action SHA bumps; `release-as` removed after first release |
@@ -23,6 +23,7 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `Makefile` | The only executable contract; adopter customization point | Grows with adopter stack, not with the template |
 | `scripts/bootstrap.sh` | Applies everything a template can't ship as files; idempotent sync | Highest-cost component — E2E-verified each release (below) |
 | `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene | Near zero |
+| `scripts/install-ci-tools.sh` | Checksum-verified CI tool installs + version pins, shared by `ci.yml` and `maintenance.yml` via `make ci-tools` | Hand-bump the pins — Dependabot cannot see them |
 | `docs/adr/` | Decision records; the "why" layer | Grows slowly by trigger criteria |
 | `docs/setup/` | Bootstrap reference + manual fallback | Update alongside `bootstrap.sh` |
 | `docs/template/` | Template-product meta (this dir); deleted on adoption | Only exists upstream |

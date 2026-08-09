@@ -7,7 +7,7 @@
 # Customize tool invocations HERE, not in .github/workflows/*.
 
 SHELL := /usr/bin/env bash
-.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr
+.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr ci-tools
 
 .DEFAULT_GOAL := help
 
@@ -53,3 +53,7 @@ test: ## L1 - placeholder test suite (adopters wire real tests here)
 verify: lint test ## L0+L1 - canonical local pre-PR gate
 
 ci-pr: verify ## Alias of verify; what ci.yml runs
+
+ci-tools: ## Install checksum-verified CI tool binaries (CI only) - TOOLS="actionlint gitleaks lychee"
+	@test -n "$(TOOLS)" || { echo 'usage: make ci-tools TOOLS="actionlint gitleaks lychee"'; exit 1; }
+	scripts/install-ci-tools.sh $(TOOLS)
