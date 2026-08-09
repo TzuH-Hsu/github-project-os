@@ -36,25 +36,21 @@ jobs:
       - name: Install lychee
         run: make ci-tools TOOLS="lychee"
 
-      - name: Check external links
-        run: make lint-docs-external
-
-      # Tool-version drift detector (issue #14). The five CI tool pins live in
-      # scripts/install-ci-tools.sh and are invisible to Dependabot — there is
-      # no manifest for it to read — so this step is the only thing watching
-      # them. Weekly, and free: hosted runners cost nothing on a public repo,
-      # and this is three GitHub API calls plus two registry fetches.
+      # `make maintenance` runs both weekly drift detectors — the external link
+      # check and the CI tool-version check (issue #14) — and aggregates their
+      # exit status, so one failing check never hides the other. That
+      # run-both-and-aggregate behaviour lives in the Makefile, not here, so
+      # `make maintenance` locally reproduces exactly what this job does
+      # (AGENTS.md: the Makefile is the only executable contract).
       #
-      # `if: always()` so a failing link check cannot mask version drift; both
-      # findings belong in the same failure email. This is step orchestration,
-      # not business logic — the logic lives in the make target. Safe here
-      # because `link-check` is NOT a required status check (only `ci` is), so
-      # no merge gating depends on it.
-      - name: Check CI tool versions
-        if: always()
+      # The five tool pins live in scripts/install-ci-tools.sh and are invisible
+      # to Dependabot — no manifest exists for it to read — so this is the only
+      # thing watching them. Free on a public repo: hosted runners cost nothing,
+      # and it is three GitHub API calls plus two registry fetches per week.
+      - name: Run maintenance checks
         env:
-          # Lets the script use `gh` (1,000 req/hr per repo) rather than the
-          # shared unauthenticated 60/hr-per-IP pool. Read-only public metadata;
-          # the job keeps its top-level `contents: read` permission.
+          # Lets check-tool-versions.sh use `gh` (1,000 req/hr per repo) rather
+          # than the shared unauthenticated 60/hr-per-IP pool. Read-only public
+          # metadata; the job keeps its top-level `contents: read` permission.
           GH_TOKEN: ${{ github.token }}
-        run: make check-tool-versions
+        run: make maintenance

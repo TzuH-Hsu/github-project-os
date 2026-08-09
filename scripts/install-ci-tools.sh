@@ -21,7 +21,11 @@
 # invokes this script implicitly.
 #
 # INSTALL_DIR (default /usr/local/bin) can point at a throwaway prefix for
-# testing. sudo is used only when the target is not writable by the caller.
+# testing the tarball tools. sudo is used only when the target is not writable
+# by the caller. It does NOT apply to markdownlint-cli2 (npm) or yamllint
+# (pipx/pip): those install into their own package-manager prefixes, which is
+# what CI needs so `make ci-pr` finds them on PATH. Each tool prints its real
+# destination, so the output never claims a directory it did not write to.
 #
 # bash 3.2 portable (macOS default /bin/bash), matching scripts/bootstrap.sh:
 # no associative arrays, no mapfile, no arrays-of-arrays.
@@ -107,9 +111,30 @@ install_tar_binary() {
   place_binary "$found" "$binary"
 }
 
-# npm and PyPI installs are integrity-checked by the registries' own lockfile /
-# hash mechanisms and an exact `==`/`@` pin, which is the equivalent of the
-# sha256 verification the tarball path does by hand.
+# npm and PyPI installs are integrity-checked by the registries' own hash
+# mechanisms plus an exact `@`/`==` pin, which is the equivalent of the sha256
+# verification the tarball path does by hand.
+#
+# NOTE: these two do NOT honour INSTALL_DIR — npm and pip/pipx install into
+# their own configured prefixes, and on CI that is what we want (the tools must
+# land on PATH for `make ci-pr`). INSTALL_DIR governs the tarball tools only;
+# the per-tool progress line below states the real destination so the output
+# never claims a directory it did not write to.
+#
+# Because they escape INSTALL_DIR, they cannot be sandboxed for a test run — so
+# outside CI they refuse to run unless ALLOW_LOCAL_INSTALL=1 is set explicitly.
+# This is not hypothetical: a "harmless" isolated-prefix test of this script did
+# a real `npm install -g` and `pip install --user` on a maintainer's laptop.
+require_install_consent() {
+  local tool="$1"
+  if [ -n "${CI:-}" ] || [ "${ALLOW_LOCAL_INSTALL:-}" = "1" ]; then
+    return 0
+  fi
+  echo "error: '${tool}' installs via a system package manager (npm -g / pip --user)." >&2
+  echo "       It ignores INSTALL_DIR, so this would modify your machine, not a sandbox." >&2
+  echo "       Re-run with ALLOW_LOCAL_INSTALL=1 if that is what you want." >&2
+  exit 1
+}
 install_npm_global() {
   local pkg="$1" version="$2"
   command -v npm >/dev/null 2>&1 || {
@@ -158,9 +183,11 @@ install_tool() {
         "lychee"
       ;;
     markdownlint-cli2)
+      require_install_consent markdownlint-cli2
       install_npm_global "markdownlint-cli2" "${MARKDOWNLINT_CLI2_VERSION}"
       ;;
     yamllint)
+      require_install_consent yamllint
       install_python_tool "yamllint" "${YAMLLINT_VERSION}"
       ;;
     *)
@@ -189,12 +216,33 @@ for tool in "$@"; do
   esac
 done
 
-mkdir -p "$INSTALL_DIR"
+# Only the tarball path writes to INSTALL_DIR, so only create it when a tarball
+# tool was actually requested — otherwise an npm/PyPI-only run would leave an
+# empty directory behind and imply it had installed something there.
+for tool in "$@"; do
+  case "$tool" in
+    actionlint | gitleaks | lychee)
+      mkdir -p "$INSTALL_DIR"
+      break
+      ;;
+  esac
+done
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 cd "$tmp"
 
+# Report the real destination per tool. npm/pip manage their own prefixes and
+# ignore INSTALL_DIR, so claiming INSTALL_DIR for them would be a lie.
+destination_of() {
+  case "$1" in
+    markdownlint-cli2) printf 'npm global prefix' ;;
+    yamllint) printf 'pipx/pip user prefix' ;;
+    *) printf '%s' "$INSTALL_DIR" ;;
+  esac
+}
+
 for tool in "$@"; do
-  echo "installing ${tool} -> ${INSTALL_DIR}"
+  echo "installing ${tool} -> $(destination_of "$tool")"
   install_tool "$tool"
 done

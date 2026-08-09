@@ -1,14 +1,16 @@
 # GitHub Project OS - make-target contract: CI workflows call these targets
 # and never contain logic of their own. L0 = lint (lint-docs, lint-actions,
 # lint-secrets, check). L1 = test. verify = L0+L1 (canonical pre-PR gate).
-# lint-docs-external and check-tool-versions belong to the weekly maintenance
-# workflow and are intentionally excluded from lint/verify/ci-pr: both make
-# external network calls, and CI-PR stays offline and hermetic.
+# maintenance = lint-docs-external + check-tool-versions, the weekly drift
+# detectors. It runs both and aggregates their exit status, so the workflow step
+# stays a bare `make maintenance` and the job's combined failure behaviour is
+# reproducible locally. All three are intentionally excluded from
+# lint/verify/ci-pr: they make external network calls, and CI-PR stays offline.
 # CHANGELOG.md is excluded from markdownlint: release-please generates it.
 # Customize tool invocations HERE, not in .github/workflows/*.
 
 SHELL := /usr/bin/env bash
-.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr ci-tools check-tool-versions
+.PHONY: help lint-docs lint-docs-external lint-actions lint-secrets check lint test verify ci-pr ci-tools check-tool-versions maintenance
 
 .DEFAULT_GOAL := help
 
@@ -61,3 +63,9 @@ ci-tools: ## Install pinned CI tools (CI only) - TOOLS="actionlint gitleaks lych
 
 check-tool-versions: ## Compare CI tool pins against upstream (weekly maintenance; makes network calls)
 	scripts/check-tool-versions.sh
+
+maintenance: ## Everything the weekly maintenance workflow runs (network; not in verify)
+	@rc=0; \
+	$(MAKE) --no-print-directory lint-docs-external || rc=1; \
+	$(MAKE) --no-print-directory check-tool-versions || rc=1; \
+	exit $$rc
