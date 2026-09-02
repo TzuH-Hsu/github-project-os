@@ -35,7 +35,10 @@ jobs:
             // and syncs the form-managed labels to match. Only ever touches
             // priority:*, area:*, agent-ok and the four type:* subtypes listed
             // in FORM_MANAGED_TYPES — every other label on the issue is left
-            // alone, including any type:* label a human added by hand.
+            // alone, including any type:* label OUTSIDE that list (a coarse
+            // type:bug/type:feature, or an adopter's own). The four form-owned
+            // subtypes are still removed when the form no longer selects them;
+            // that is the point of the sync.
             const body = context.payload.issue.body || '';
 
             // Split the body into sections keyed by "### <Heading>".
