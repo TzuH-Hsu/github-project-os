@@ -2,6 +2,14 @@
 {
   "default": true,
   "MD013": false, // No line-length limit for prose files
+  "MD010": {
+    // Hard tabs stay banned in prose; allowed inside fenced code blocks only.
+    // A Makefile recipe line MUST begin with a tab -- `make` rejects spaces
+    // with "missing separator" -- so a makefile example indented with spaces
+    // is not copy-pasteable. This is the narrow, documented escape hatch, not
+    // a relaxation: MD010 still fires everywhere it is meaningful.
+    "code_blocks": false
+  },
   "MD024": {
     "siblings_only": true // Allow repeated headings across different sections
   },
