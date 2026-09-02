@@ -35,32 +35,37 @@ Manual: `gh auth status`; if scopes are missing, `gh auth refresh -s repo -s pro
 cloning.** GitHub copies the template contents asynchronously and `gh repo
 create` returns before that copy finishes, so an immediate clone can hand you a
 repo with no commits and an empty working tree — after which every phase below
-fails on a repo that looks like it was never created from a template
-(cli/cli#2290, cli/cli#5142, cli/cli#7055, all still open; `--clone` is the
-variant that fails most often). Poll for the first commit, then clone:
+fails on a repo that looks like it was never created from a template. It has
+been reported against `gh` repeatedly over the years (cli/cli#2290,
+cli/cli#5142, cli/cli#7055), and `--clone` is the variant that fails most
+often. Poll for the first commit, then clone:
 
 ```bash
 REPO=OWNER/NEW-REPO   # the repo you just created from the template
 
 # Fail fast on a typo or missing access: the repo record exists immediately,
-# only its contents are asynchronous.
-gh repo view "$REPO" >/dev/null || echo "no such repo (or no access): $REPO" >&2
-
-sha=""
-n=0
-while [ "$n" -lt 30 ]; do
-  if sha="$(gh api "repos/$REPO/commits?per_page=1" --jq '.[0].sha' 2>/dev/null)" && [ -n "$sha" ]; then
-    break
-  fi
-  sha=""
-  n=$((n + 1))
-  sleep 2
-done
-
-if [ -n "$sha" ]; then
-  gh repo clone "$REPO"
+# only its contents are asynchronous. This GATES the poll -- without it, a
+# mistyped name burns all 30 attempts and then reports a misleading
+# "template copy" timeout.
+if ! gh repo view "$REPO" >/dev/null 2>&1; then
+  echo "no such repo, or no access: $REPO" >&2
 else
-  echo "timed out after ~60s -- check https://github.com/$REPO" >&2
+  sha=""
+  n=0
+  while [ "$n" -lt 30 ]; do
+    if sha="$(gh api "repos/$REPO/commits?per_page=1" --jq '.[0].sha' 2>/dev/null)" && [ -n "$sha" ]; then
+      break
+    fi
+    sha=""
+    n=$((n + 1))
+    sleep 2
+  done
+
+  if [ -n "$sha" ]; then
+    gh repo clone "$REPO"
+  else
+    echo "still no commits after ~60s -- check https://github.com/$REPO" >&2
+  fi
 fi
 ```
 
@@ -234,9 +239,19 @@ git reset --hard origin/main
 ```
 
 That discards uncommitted work — only run it on a clone you have not started
-editing. And if you cloned while the repo had *no* commits at all, there is
-nothing to reset to: `git fetch` returns nothing, local `HEAD` is unborn and may
-not even be on `main`. Delete the directory and clone again instead.
+editing.
+
+If you cloned while the repo had *no* commits, `origin/main` does not exist
+locally yet. Once GitHub finishes the copy, `git fetch origin` will create it —
+but your local `HEAD` is unborn and may not be on `main`, so check before
+resetting:
+
+```bash
+git fetch origin
+git rev-parse --verify origin/main >/dev/null 2>&1 \
+  && git checkout -B main --track origin/main \
+  || echo "remote still has no commits - wait, or delete the directory and clone again" >&2
+```
 
 **"token scopes do not list 'project'"** — the default `gh auth login` token
 doesn't request the `project` scope. Fix: `gh auth refresh -s project`, then
