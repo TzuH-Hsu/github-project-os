@@ -64,20 +64,31 @@ ecosystem's own checker (`pip-licenses`, `go-licenses check`, `cargo-deny`) over
 a generic scanner:
 
 ```makefile
+# MANIFESTS: set to whatever your ecosystem actually locks.
+MANIFESTS ?= package-lock.json go.sum requirements.txt Cargo.lock poetry.lock
+SBOM_TMP  ?= .sbom.json
+
 lint-licenses: ## L4 - reject copyleft dependencies (adopter-defined)
 	@command -v syft >/dev/null 2>&1 || { echo "FAIL: syft not installed, cannot verify L4"; exit 1; }
-	@test -s package-lock.json -o -s go.sum -o -s requirements.txt \
-	  || { echo "FAIL: no dependency manifest - refusing to report a clean scan of nothing"; exit 1; }
-	syft dir:. -o json -q | scripts/check-licenses.py
+	@found=""; for m in $(MANIFESTS); do [ -s "$$m" ] && found=1; done; \
+	  [ -n "$$found" ] || { echo "FAIL: none of ($(MANIFESTS)) present - refusing to report a clean scan of nothing"; exit 1; }
+	syft dir:. -o json -q > $(SBOM_TMP)
+	scripts/check-licenses.py < $(SBOM_TMP)
 ```
 
-The manifest assertion is the load-bearing line: without it the target passes
-forever on an empty set. The same goes for an SBOM artifact — an empty one is
-worse than none, because it looks like evidence. And if you write the checker
-yourself, two things fail open by default: an SPDX `OR` is a *choice*, so
-`MIT OR GPL-2.0` must pass rather than fail, and `NOASSERTION` or an empty
-licence field must fail loudly, since that is what scanners emit for every
-package they could not resolve.
+Three things here are load-bearing. The manifest assertion, without which the
+target passes forever on an empty set — and `MANIFESTS` has to list what *your*
+ecosystem locks, or the guard fails honest repositories. Writing the SBOM to a
+file instead of piping it, because a shell pipeline reports only the last
+command's status, so `syft ... | checker` reports success when `syft` itself
+fails (`set -o pipefail` is the alternative, but it is not portable to every
+adopter's `SHELL`). And an SBOM artifact is subject to the same rule as the
+check — an empty one is worse than none, because it looks like evidence.
+
+If you write the checker yourself, two things fail open by default: an SPDX `OR`
+is a *choice*, so `MIT OR GPL-2.0` must pass rather than fail, and `NOASSERTION`
+or an empty licence field must fail loudly, since that is what scanners emit for
+every package they could not resolve.
 
 ## Pitfalls
 
