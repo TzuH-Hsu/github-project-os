@@ -1,0 +1,19 @@
+name: zz-probe
+
+# TEMPORARY probe workflow. Never merged. Exists to answer one question:
+# when fromJSON() fails on a malformed repo variable, does GitHub create a
+# failed check run, or no check run at all? Uses RUNNER_LABELS_PROBE, not
+# RUNNER_LABELS, so the real `ci` required check is never affected.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS_PROBE || '["ubuntu-latest"]') }}
+    timeout-minutes: 5
+    steps:
+      - run: echo "probe ran"
