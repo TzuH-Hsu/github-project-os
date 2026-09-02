@@ -31,6 +31,51 @@ Checks `gh` is installed and authenticated, that the token has `repo` and
 
 Manual: `gh auth status`; if scopes are missing, `gh auth refresh -s repo -s project`.
 
+**If you created the repo with `gh repo create --template`, wait before
+cloning.** GitHub copies the template contents asynchronously and `gh repo
+create` returns before that copy finishes, so an immediate clone can hand you a
+repo with no commits and an empty working tree — after which every phase below
+fails on a repo that looks like it was never created from a template
+(cli/cli#2290, cli/cli#5142, cli/cli#7055, all still open; `--clone` is the
+variant that fails most often). Poll for the first commit, then clone:
+
+```bash
+REPO=OWNER/NEW-REPO   # the repo you just created from the template
+
+# Fail fast on a typo or missing access: the repo record exists immediately,
+# only its contents are asynchronous.
+gh repo view "$REPO" >/dev/null || echo "no such repo (or no access): $REPO" >&2
+
+sha=""
+n=0
+while [ "$n" -lt 30 ]; do
+  if sha="$(gh api "repos/$REPO/commits?per_page=1" --jq '.[0].sha' 2>/dev/null)" && [ -n "$sha" ]; then
+    break
+  fi
+  sha=""
+  n=$((n + 1))
+  sleep 2
+done
+
+if [ -n "$sha" ]; then
+  gh repo clone "$REPO"
+else
+  echo "timed out after ~60s -- check https://github.com/$REPO" >&2
+fi
+```
+
+Bounded at roughly 60 seconds, never loops forever, and runs on bash 3.2 (macOS
+`/bin/bash`): no `mapfile`, no associative arrays, no `timeout(1)`. It is also
+safe to paste into an interactive shell — no `exit`, no dependence on `set -e`.
+
+Two details are load-bearing. Polling for a commit rather than for
+`repos/{owner}/{repo}/contents` matters because a bare `contents` 404 cannot
+distinguish "not ready yet" from "wrong name" or "no access"; the `gh repo view`
+line above separates those. And the `&&` ordering matters because `gh api`
+prints its JSON error body to *stdout* on an HTTP error, so `sha` would
+otherwise hold that body — the non-zero exit short-circuits before the emptiness
+test is ever reached.
+
 ### 1. Labels
 
 Reads `.github/labels.yml` and creates-or-updates each label
@@ -177,6 +222,21 @@ yourself: `git commit -m "chore: bootstrap repository"`.
 **Note on first release:** The `chore: bootstrap repository` commit does not trigger a release PR. release-please only reacts to releasable Conventional Commit types (`feat`, `fix`, or commits with `!` / `BREAKING CHANGE`); the first `feat:` or `fix:` commit after bootstrap triggers the v0.1.0 release PR. To cut a release immediately, add a `Release-As: 0.1.0` footer to the commit message or manually trigger release-please.
 
 ## Troubleshooting
+
+**Cloned repo is empty, or bootstrap says `AGENTS.md and .git not found`** —
+`gh repo create --template` returns before GitHub finishes copying the template,
+so the clone can predate the contents. See the wait loop in "0. Preflight" to
+prevent it. To recover a clone you already made:
+
+```bash
+git fetch origin
+git reset --hard origin/main
+```
+
+That discards uncommitted work — only run it on a clone you have not started
+editing. And if you cloned while the repo had *no* commits at all, there is
+nothing to reset to: `git fetch` returns nothing, local `HEAD` is unborn and may
+not even be on `main`. Delete the directory and clone again instead.
 
 **"token scopes do not list 'project'"** — the default `gh auth login` token
 doesn't request the `project` scope. Fix: `gh auth refresh -s project`, then
