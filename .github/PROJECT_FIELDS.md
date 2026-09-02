@@ -6,7 +6,7 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 
 | Attribute | Home | Values / format |
 | --- | --- | --- |
-| Type (coarse) | **Native issue type** | `Bug` / `Feature` / `Task` — set by the issue form |
+| Type (coarse) | **Native issue type** | `Bug` / `Feature` / `Task` — set by the issue form (no organization? see "Personal accounts") |
 | Type (subtype) | `type:*` **labels** | `chore` / `ops` / `docs` / `security` — Task subtypes only |
 | Priority | `priority:*` **labels** | `p0` critical / `p1` milestone-blocking / `p2` important / `p3` polish |
 | Area | `area:*` **labels** | starter set: `docs`, `skills`, `ci`, `governance` — rename to your domains |
@@ -18,16 +18,48 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 | Dependencies | **Native issue relationships** | GitHub blocked-by / blocking |
 | Epic membership | **Native sub-issues** | parent issue with sub-issues; no `epic:*` labels |
 
-## Personal accounts
+## When native issue types are unavailable
 
-Native issue types require an organization — on personal-account repos the
-coarse Type row above has no native home (`repos/{repo}/issue-types` 404s).
-The issue form used at creation (bug/feature/task) still captures intent,
-but GitHub silently ignores its `type:` key with no org to back it. Adopters
-on personal accounts who need queryable coarse type may extend the `type:*`
-labels with `bug`/`feature` as the Type home instead — this is still
-single-home: labels become the *one* home for Type when native types are
-unavailable, never both at once.
+Native issue types began as an organization-only feature and have since been
+rolled out to personal accounts as well, so **check rather than assume**:
+
+```bash
+gh api repos/{owner}/{repo}/issue-types --jq '.[].name'
+```
+
+If that 404s or comes back empty, the issue forms' top-level `type:` key is
+silently ignored — the form still captures intent at creation, but nothing
+stores it. Bootstrap phase 2 runs this check for you and says which case you
+are in.
+
+The coarse Type row above therefore has **no home by default** on a personal
+account. There are two supported resolutions, and you pick exactly one:
+
+1. **Accept no coarse Type** (the default; nothing to configure). Task
+   subtypes, priority, area, status and milestone all still work — you simply
+   cannot filter by Bug vs Feature.
+2. **Adopt the label fallback.** Uncomment the `type:bug` / `type:feature`
+   block in `.github/labels.yml` and re-run `scripts/bootstrap.sh`. Labels
+   become the *one* home for coarse Type, and the authority-map row above reads
+   `type:bug` / `type:feature` **labels** instead of Native issue type.
+
+This is still single-home, and it is enforced in both directions:
+
+- The two labels ship **commented out**, never active, so an organization repo
+  cannot end up holding a native `Bug` type *and* a `type:bug` label.
+- Bootstrap phase 2 checks both directions. On a 404 it reports whether the
+  fallback is in use; when native types *are* available and the fallback is
+  also declared, it reports a single-home violation and tells you to re-comment
+  the block.
+- If you later transfer the repo into an organization, removing those two
+  entries is part of enabling native types — not optional cleanup.
+- The labels are applied **by hand**. `.github/workflows/issue-labeler.yml`
+  never adds or removes them: the coarse Type comes from the form's top-level
+  `type:` key, which is not part of the issue body the labeler parses.
+- There is no `type:task`. An issue with neither label is a Task, and every
+  Task already carries exactly one required
+  `type:chore|ops|docs|security` subtype — so the Task query stays a single
+  positive predicate rather than a negation.
 
 ## Rules
 

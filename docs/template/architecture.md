@@ -12,7 +12,7 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructions.md` | Per-agent entry points (≤10 lines each) | Near zero — pointers only |
 | `skills/` (15 modules) | On-demand knowledge for humans + agents | Content reviews; consistency enforced by `scripts/check-skills.sh` |
 | `.github/PROJECT_FIELDS.md` | Metadata single-home authority map | Update only when taxonomy changes (rare, ADR-worthy) |
-| `.github/labels.yml` | Labels as code; bootstrap re-run = sync | Edit alongside label changes; allowlist in `issue-labeler.yml` must match |
+| `.github/labels.yml` | Labels as code; bootstrap re-run = sync; carries the commented-out coarse-Type fallback (ADR-0006) | Edit alongside label changes; `FORM_MANAGED_TYPES` in `issue-labeler.yml` must match, and the commented block must stay commented |
 | `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Sync option lists with `labels.yml` |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Validation ladder + RISK convention at point of use | Near zero |
 | `.github/workflows/ci.yml` | L0 gate; installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` or `runs-on:` | SHA-pin bumps via Dependabot |

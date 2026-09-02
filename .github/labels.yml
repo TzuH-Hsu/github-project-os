@@ -10,6 +10,14 @@
 # `description:` entries only, in that order. No YAML quoting, no
 # multi-line block scalars, no inline comments after values.
 #
+# Whole-line comments are fine, and are load-bearing here: the coarse-Type
+# fallback block below ships commented out on purpose. Comments *after* a value
+# on the same line are still unsupported.
+#
+# Descriptions must not contain a ": " sequence — `make lint-docs` runs
+# `yamllint .` over this file, so `description: Coarse Type: Bug` is invalid
+# YAML even though the awk parser would happily accept it.
+#
 
 labels:
   - name: type:chore
@@ -27,6 +35,40 @@ labels:
   - name: type:security
     color: d93f0b
     description: Security subtype (native type stays Task)
+
+  # --- Coarse Type fallback (personal accounts only) -------------------------
+  # Uncomment ONLY if `gh api repos/{owner}/{repo}/issue-types` 404s or is empty
+  # for this repo. When it does, the coarse Type (Bug/Feature/Task) has no native
+  # home and the issue forms' top-level `type:` key is silently ignored.
+  #
+  # Native issue types began as an organization-only feature and have since been
+  # rolled out to personal accounts too, so check the endpoint rather than
+  # assuming from your account type -- bootstrap phase 2 checks it for you.
+  #
+  # Uncomment the two entries below ONLY on a personal-account repo where you
+  # want a queryable coarse Type. Labels then become the *one* home for it — see
+  # "Personal accounts" in .github/PROJECT_FIELDS.md.
+  #
+  # On an ORGANIZATION repo, leave them commented out. Native issue types are
+  # the home there, and activating these would give coarse Type two homes — the
+  # dual-write ADR-0003 forbids. Bootstrap phase 2 checks both directions and
+  # warns if it sees the wrong one.
+  #
+  # Task needs no label: an issue with neither of these is a Task, and every
+  # Task already carries exactly one required type:chore|ops|docs|security
+  # subtype, so the Task query stays a positive predicate.
+  #
+  # These are applied BY HAND. The labeler workflow never adds or removes them:
+  # the coarse Type comes from the form's top-level `type:` key, which is not
+  # part of the issue body it parses.
+  #
+  # - name: type:bug
+  #   color: d73a4a
+  #   description: Coarse Type Bug — label fallback where native issue types are unavailable
+  #
+  # - name: type:feature
+  #   color: a2eeef
+  #   description: Coarse Type Feature — label fallback where native issue types are unavailable
 
   - name: priority:p0
     color: b60205

@@ -396,6 +396,17 @@ EOF
 
 # --- Phase 2 — Issue types ---
 
+# True when the coarse-Type label fallback is active. Reads the DECLARED set
+# from labels.yml rather than querying the live repo: phase 1 has already synced
+# the declaration to GitHub, and reading the file keeps --dry-run honest -- a dry
+# run creates nothing, so a live-repo query would report "no fallback" on a repo
+# that is about to get one.
+coarse_type_fallback_declared() {
+  local labels_file=".github/labels.yml"
+  [ -f "$labels_file" ] || return 1
+  parse_labels_yml "$labels_file" | cut -f1 | grep -qxF "type:bug"
+}
+
 phase_issue_types() {
   doing "Phase 2: native issue types"
 
@@ -412,11 +423,17 @@ phase_issue_types() {
 
   if [ -z "$types" ]; then
     warn "repos/${REPO}/issue-types returned 404/empty"
-    warn "native issue types are an ORGANIZATION-only GitHub feature:"
-    warn "  - on an org repo: enable/verify Bug/Feature/Task in org settings (Organization settings -> Repository -> Issue types)"
-    warn "  - on a PERSONAL account: this feature does not exist — issue forms' 'type:' key is silently ignored"
+    warn "native issue types are unavailable on this repo, so the issue forms' 'type:' key is silently ignored:"
+    warn "  - org repo: enable/verify Bug/Feature/Task in Organization settings -> Repository -> Issue types"
+    warn "  - personal account: GitHub rolled these out to user accounts too, so check Settings -> Issue types before assuming you cannot have them"
     warn "  see .github/PROJECT_FIELDS.md for the documented fallback on personal accounts"
     manual "Org repos: enable/verify native Bug/Feature/Task issue types in org settings. Personal accounts: the feature does not exist — see the 'Personal accounts' note in .github/PROJECT_FIELDS.md for the fallback"
+    if coarse_type_fallback_declared; then
+      ok "label fallback in use — coarse Type home is type:bug / type:feature (see .github/PROJECT_FIELDS.md)"
+    else
+      warn "  label fallback NOT in use — this repo currently has no home for coarse Type"
+      manual "No coarse Type home. Either accept that (subtypes, priority and area still work), or uncomment the type:bug / type:feature block in .github/labels.yml and re-run bootstrap — see 'Personal accounts' in .github/PROJECT_FIELDS.md"
+    fi
     record_phase "2. Issue types" "warn"
     return
   fi
@@ -430,9 +447,23 @@ phase_issue_types() {
     fi
   done
 
+  # Enforcement in the other direction: native types are available here, so a
+  # declared label fallback would give coarse Type two homes (ADR-0003). This is
+  # the half a "ship them active" design cannot provide at all.
+  local violation=0
+  if coarse_type_fallback_declared; then
+    violation=1
+    warn "single-home violation: native issue types are available AND type:bug/type:feature are declared in .github/labels.yml"
+    warn "  coarse Type now has two homes; they will drift (ADR-0003)"
+    manual "Re-comment or delete the type:bug / type:feature entries in .github/labels.yml and re-run bootstrap — with native issue types available, the native type is the single home for coarse Type"
+  fi
+
   if [ -n "$missing" ]; then
     warn "missing native issue type(s): $missing"
     manual "Add missing native issue type(s) in org/repo settings: $missing"
+  fi
+
+  if [ -n "$missing" ] || [ "$violation" -eq 1 ]; then
     record_phase "2. Issue types" "warn"
   else
     record_phase "2. Issue types" "ok"
