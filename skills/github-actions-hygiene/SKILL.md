@@ -12,7 +12,7 @@ Workflows are the highest-privilege, least-reviewed code in most repositories �
 
 ## Rules
 
-1. **Workflows call `make` targets; they never contain logic.** All branching, tool installation flags, and conditionals belong in the `Makefile`. A workflow step should read as `run: make lint`, not a shell script with real decisions in it. Adopters customize the Makefile — never the workflow YAML — to change what runs.
+1. **Workflows call `make` targets; they never contain logic.** All branching, tool installation flags, and conditionals belong in the `Makefile`. A workflow step should read as `run: make lint`, not a shell script with real decisions in it. Adopters customize the Makefile — never the workflow YAML — to change what runs. The one thing the Makefile cannot own is `runs-on`, which GitHub resolves before any make target exists; expose it as a repository variable (`RUNNER_LABELS` here) so *where* a job runs stays configurable without forking the file.
 2. **Least privilege by default.** Set `permissions: contents: read` at the workflow (top) level; escalate only inside the specific job that needs more, and only to the exact scope needed (e.g. `pull-requests: write` on a labeler job, not on the whole workflow).
 3. **Pin every third-party action to a full commit SHA**, with the human-readable version as a trailing comment — never a floating tag like `@v4`:
 
