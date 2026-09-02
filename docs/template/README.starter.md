@@ -24,4 +24,7 @@ make verify   # lint + tests — run before every PR
 
 ## License
 
-<!-- Your license. The template itself is MIT; your project may differ. -->
+See `LICENSE` — chosen during bootstrap (phase 9). Third-party attribution,
+including the MIT-licensed scaffolding this repository is built on, lives in
+`NOTICE` and must be kept even if you relicense. Reasoning and both file
+bodies: `docs/setup/licensing.md`.

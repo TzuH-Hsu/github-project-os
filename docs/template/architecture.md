@@ -20,13 +20,14 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `.github/workflows/maintenance.yml` | Weekly drift detectors: external link check + CI tool version check | Near zero |
 | `.github/workflows/release-please.yml` + configs | Human-gated release automation (ADR-0002) | Action SHA bumps; `release-as` removed after first release |
 | `.github/rulesets/main-branch.json` | Importable branch protection (PR + green `ci` required) | Near zero |
+| `LICENSE` | The template's own licence (MIT); bootstrap phase 9 replaces it with the adopter's choice and moves upstream attribution to `NOTICE` | Near zero — the holder line is asserted against `bootstrap.sh`'s constants by `scripts/check-license-marker.sh` |
 | `Makefile` | The only executable contract; adopter customization point | Grows with adopter stack, not with the template |
 | `scripts/bootstrap.sh` | Applies everything a template can't ship as files; idempotent sync | Highest-cost component — E2E-verified each release (below) |
-| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene | Near zero |
+| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker | Near zero |
 | `scripts/install-ci-tools.sh` | Checksum-verified CI tool installs; single home for all five tool version pins, shared by `ci.yml` and `maintenance.yml` via `make ci-tools` | Hand-bump a pin when the drift check flags it |
 | `scripts/check-tool-versions.sh` | Diffs those pins against upstream weekly and fails on drift — Dependabot cannot see them, so nothing else would | Near zero; add a row when a tool is added |
 | `docs/adr/` | Decision records; the "why" layer | Grows slowly by trigger criteria |
-| `docs/setup/` | Bootstrap reference + manual fallback | Update alongside `bootstrap.sh` |
+| `docs/setup/` | Bootstrap + licensing reference and manual fallback | Update alongside `bootstrap.sh` |
 | `docs/template/` | Template-product meta (this dir); deleted on adoption | Only exists upstream |
 
 ## Release exit checklist (template releases)
