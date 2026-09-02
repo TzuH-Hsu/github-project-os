@@ -36,7 +36,7 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Questions and 
 
 ## Status
 
-The template is released and verified end to end (create from template → bootstrap → CI → release cut), and is usable today. Conventions may still evolve before `v1.0`: adopt from a tag rather than `main`, and read the [release notes](https://github.com/TzuH-Hsu/github-project-os/releases) before pulling template updates into an existing project ([how to do that](docs/template/upgrading.md)).
+The template is released and verified end to end (create from template → bootstrap → CI → release cut), and is usable today. Conventions may still evolve before `v1.0`, so check the [release notes](https://github.com/TzuH-Hsu/github-project-os/releases) for what changed — especially before pulling template updates into a project you have already adopted ([how to do that](docs/template/upgrading.md)).
 
 ## License
 
