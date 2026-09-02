@@ -101,13 +101,29 @@ one-time step; see `docs/setup/project-views.md`.
 
 ### 5. Repo settings
 
-Sets merge strategy (squash + rebase allowed, merge commits disabled),
-`delete_branch_on_merge`, issues on, wiki off.
+Sets squash as the only merge strategy, pins the squash commit message to the
+PR title and body, and turns on `delete_branch_on_merge`, `allow_update_branch`,
+issues, and wiki off.
 
-Manual: **Settings → General → Pull Requests**: enable "Allow squash
-merging" and "Allow rebase merging", disable "Allow merge commits", enable
-"Automatically delete head branches". Under **Features**: Issues on, Wikis
-off.
+The two squash-message settings are not cosmetic. GitHub's defaults are
+`COMMIT_OR_PR_TITLE` and `COMMIT_MESSAGES`, which mean the PR title is used
+only when a PR has two or more commits, and every branch commit message is
+concatenated into the `main` commit body. Both break promises this repository
+makes elsewhere: `AGENTS.md` states the PR title becomes the commit message on
+`main`, and release-please parses that commit body for further Conventional
+Commits and `BREAKING-CHANGE` footers — so a stray `feat:` or `fix:` on a
+branch can produce a phantom changelog entry or an unintended version bump.
+
+Rebase is off because nothing needs it. The release PR is merged by a human
+like any other PR (see `docs/adr/ADR-0002-release-flow.md`), not by
+release-please, and squash is what release-please recommends for the linear
+history it parses.
+
+Manual: **Settings → General → Pull Requests** — enable "Allow squash merging"
+and, under it, set the default commit message dropdown to **"Pull request title
+and description"**; disable "Allow merge commits" and "Allow rebase merging";
+enable "Always suggest updating pull request branches" and "Automatically
+delete head branches". Under **Features**: Issues on, Wikis off.
 
 ### 6. Actions PR permission
 

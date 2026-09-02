@@ -37,11 +37,11 @@ gh issue list --milestone "v0.2.0" --label "priority:p0,priority:p1" --state ope
 # empty output = exit criterion met
 ```
 
-Merge the release-please PR (never squash-merge it manually outside its own flow; let release-please's merge produce the tag):
+Merge the release-please PR yourself, with squash — the only strategy this repo enables (bootstrap phase 5 sets `allow_merge_commit=false` and `allow_rebase_merge=false`). release-please does not merge its own PR; its next run on `push: main` detects the merged release PR and cuts the tag and GitHub Release:
 
 ```bash
 gh pr view --search "head:release-please--branches--main" --json number,statusCheckRollup
-gh pr merge <release-pr#> --merge
+gh pr merge <release-pr#> --squash
 ```
 
 Add the human TLDR after the release is cut:
