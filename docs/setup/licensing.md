@@ -130,6 +130,7 @@ this trailer.
 The copyright line here is the **template's**, not yours, and that is the whole
 point — this file exists to carry the upstream notice. Do not substitute your own
 name into it; your identity belongs in `LICENSE`.
+
 ```text
 NOTICE — third-party attribution
 
