@@ -122,6 +122,17 @@ EOF
 }
 
 # --- arg parsing ---
+# True only when this file is executed, not sourced. Sourcing must define
+# functions and touch nothing else: without this the top-level argument parser
+# below consumes the CALLER's positional parameters, and an ordinary caller
+# argument is treated as an unknown bootstrap option and calls exit 1 -- which
+# terminates the sourcing shell.
+#
+# Caveat that remains by design: sourcing still applies `set -euo pipefail` to
+# the caller. Source from a subshell if that matters.
+bootstrap_is_main() { [ "${BASH_SOURCE[0]}" = "$0" ]; }
+
+if bootstrap_is_main; then
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -149,6 +160,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+fi
 
 # confirm <prompt> <default: y|n> → returns 0 for yes, 1 for no. Always
 # yes under --yes.
@@ -817,7 +829,17 @@ phase_security() {
   ok "repository visibility: ${visibility}"
 
   if [ "$visibility" = "public" ]; then
-    if [ "$secret_scanning" = "enabled" ] && [ "$push_protection" = "enabled" ]; then
+    if [ "$secret_scanning" = "unknown" ] || [ "$push_protection" = "unknown" ]; then
+      # security_and_analysis is only populated for callers with admin on the
+      # repo. "unknown" therefore means COULD NOT READ, never "disabled" --
+      # prompting here (or PATCHing under --yes) would act on a guess, and the
+      # phase would report a state it never actually observed.
+      warn "cannot read secret scanning state (secret scanning: ${secret_scanning}, push protection: ${push_protection})"
+      warn "  security_and_analysis is only visible to callers with admin on ${REPO}"
+      warn "  this is 'not readable', not 'disabled' — bootstrap will not guess"
+      manual "Check Settings → Advanced Security → Secret scanning and Push protection by hand; bootstrap could not read their current state"
+      result="warn"
+    elif [ "$secret_scanning" = "enabled" ] && [ "$push_protection" = "enabled" ]; then
       ok "secret scanning + push protection: already enabled"
     else
       cat <<'EOF'
@@ -1308,6 +1330,13 @@ phase_license() {
   # A plain redirect, not run_or_dry: that helper is the choke point for
   # mutating `gh` calls, and the CHANGELOG/manifest writes in phase 10 branch
   # on DRY_RUN inline the same way.
+  # NOTICE FIRST, deliberately. If the attribution cannot be written -- directory
+  # permissions, quota, I/O -- LICENSE must be left exactly as it was. Writing
+  # LICENSE first and failing here would leave the repository with neither the
+  # template's original notice nor the promised attribution, which is a worse
+  # state than not having run the phase at all.
+  write_notice || { record_phase "9. Licence" "fail"; return 1; }
+
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '%s[dry-run]%s would write LICENSE (%s, copyright %s %s)\n' \
       "$C_YELLOW" "$C_RESET" "$LICENSE_CHOICE" "$year" "$LICENSE_HOLDER"
@@ -1316,8 +1345,6 @@ phase_license() {
       || { fail "writing LICENSE failed"; record_phase "9. Licence" "fail"; return 1; }
   fi
   ok "LICENSE written (${LICENSE_CHOICE}, copyright ${year} ${LICENSE_HOLDER})"
-
-  write_notice || { record_phase "9. Licence" "fail"; return 1; }
 
   if [ "$LICENSE_CHOICE" = "proprietary" ]; then
     manual "Have counsel review LICENSE — it is a template-generated example — then delete the 'Template-generated example' trailer at the bottom of the file"
@@ -1552,6 +1579,6 @@ main() {
 # Nothing in `make verify` covers this script, so being able to exercise a
 # single phase in isolation is the only unit-test surface it has.
 # `bash scripts/bootstrap.sh` is unaffected.
-if [ "${BASH_SOURCE[0]}" = "$0" ]; then
+if bootstrap_is_main; then
   main "$@"
 fi
