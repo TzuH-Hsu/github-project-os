@@ -27,3 +27,4 @@ Routine choices (a library patch bump, a wording tweak) do not get ADRs. When in
 | [ADR-0003](ADR-0003-metadata-single-home.md) | Metadata single-home policy | Accepted |
 | [ADR-0004](ADR-0004-adopter-licence-choice.md) | The adopter's licence is an explicit bootstrap decision | Accepted |
 | [ADR-0005](ADR-0005-runner-selection-variable.md) | Runner selection is an adopter variable, not a workflow edit | Accepted |
+| [ADR-0006](ADR-0006-coarse-type-fallback.md) | Coarse Type on accounts without native issue types | Accepted |

@@ -98,12 +98,26 @@ Checks whether native issue types (`Bug`/`Feature`/`Task`) are available via
 `gh api repos/{repo}/issue-types`. This endpoint isn't available on every
 plan/org configuration.
 
-Manual: **Organization settings → Repository → Issue types** (an
-organization account is required — personal accounts don't expose native
-issue types). If unavailable, the issue forms' `type:` key is silently
-ignored by GitHub; the form still works, it just won't set a native type.
-On personal-account repos, see the "Personal accounts" note in
-`.github/PROJECT_FIELDS.md` for the label-based fallback.
+Manual: **Organization settings → Repository → Issue types** on an org repo, or
+**Settings → Issue types** on a personal account — these began as an
+organization-only feature and have since been rolled out to user accounts, so
+check the endpoint rather than assuming from your account type. If they really
+are unavailable, the issue forms' `type:` key is silently ignored by GitHub; the
+form still works, it just won't set a native type.
+On a personal account you then choose one of two things, and the phase tells
+you which you currently have:
+
+1. **Accept no coarse Type.** Subtypes, priority, area, status and milestone all
+   still work; you just cannot filter Bug vs Feature. Nothing to configure.
+2. **Adopt the label fallback.** Uncomment the `type:bug` / `type:feature` block
+   in `.github/labels.yml` and re-run. Labels become the *one* home for coarse
+   Type.
+
+They ship commented out so an organization repo — which already has native
+issue types — cannot end up holding both homes at once. The phase checks that
+direction too: with native types available *and* the fallback declared, it
+reports a single-home violation. See "Personal accounts" in
+`.github/PROJECT_FIELDS.md`.
 
 ### 3. Milestone
 
@@ -374,11 +388,14 @@ admin, or set the four toggles by hand in **Settings → Advanced Security**.
 doesn't request the `project` scope. Fix: `gh auth refresh -s project`, then
 re-run.
 
-**`issue-types` endpoint returns 404 / empty** — native issue types are an
-organization-account feature; personal-account repos and some plans don't
-expose them. The issue forms still work, but their `type:` key has no
-effect until issue types are enabled at the org level (or the repo is
-transferred into an org that has them).
+**`issue-types` endpoint returns 404 / empty** — the repo has no native issue
+types, so the issue forms' `type:` key has no effect. These began as an
+organization-only feature and have since been rolled out to personal accounts
+as well, so check **Settings → Issue types** (or the org equivalent) before
+concluding you cannot have them. If they genuinely are unavailable and you want
+a queryable coarse Type, uncomment the `type:bug` / `type:feature` block in
+`.github/labels.yml` and re-run — those labels are applied by hand, never by the
+labeler workflow.
 
 **Ruleset name conflict** — if a ruleset named `main-branch-protection`
 already exists, the script skips phase 8 rather than overwriting it (syncing
