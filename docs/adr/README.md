@@ -26,3 +26,4 @@ Routine choices (a library patch bump, a wording tweak) do not get ADRs. When in
 | [ADR-0002](ADR-0002-release-flow.md) | Release flow: release-please with human-gated release PRs | Accepted |
 | [ADR-0003](ADR-0003-metadata-single-home.md) | Metadata single-home policy | Accepted |
 | [ADR-0004](ADR-0004-adopter-licence-choice.md) | The adopter's licence is an explicit bootstrap decision | Accepted |
+| [ADR-0005](ADR-0005-runner-selection-variable.md) | Runner selection is an adopter variable, not a workflow edit | Accepted |

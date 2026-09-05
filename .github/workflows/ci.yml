@@ -17,6 +17,24 @@ name: CI
 # There is no minutes argument for either. The job runs in ~15s and bills as one
 # rounded-up minute whether it does work or not, and this is a public repo where
 # hosted runners are free. Skipping saves nothing and risks everything.
+#
+# `runs-on` below is a THIRD route into the same "waiting for status" trap, and
+# the only one an adopter can trigger from repository settings rather than from
+# this file. Measured, not assumed: with the variable set to the tempting wrong
+# value `ubuntu-latest` (a bare string instead of a JSON array), fromJSON fails,
+# the run completes with conclusion=failure and the message "This run likely
+# failed because of a workflow file issue", ZERO jobs are created, and ZERO
+# check runs are attached to the commit. The `ci` check is therefore never
+# reported and the PR cannot merge. Recovery, which is not obvious from the
+# symptom:
+#
+#   gh variable delete RUNNER_LABELS
+#
+# Self-hosted runners are NOT safe here while this repository is public: this
+# workflow runs on pull_request, which includes fork PRs, and it checks out and
+# executes the PR's own Makefile and scripts. See docs/setup/runners.md.
+#
+# See docs/setup/runners.md before setting it.
 
 on:
   pull_request:
@@ -33,7 +51,7 @@ concurrency:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
     timeout-minutes: 15
     steps:
       - name: Checkout

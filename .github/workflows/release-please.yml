@@ -26,7 +26,10 @@ concurrency:
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    # Runner selection: the RUNNER_LABELS repo variable, a JSON ARRAY of labels.
+    # Unset = ubuntu-latest. A malformed value stops this job reporting any
+    # check at all -- see docs/setup/runners.md and ci.yml's header.
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
     timeout-minutes: 10
     permissions:
       contents: write

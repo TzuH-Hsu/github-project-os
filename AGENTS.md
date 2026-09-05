@@ -16,7 +16,7 @@ Agent-specific entry files (`CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructi
 
 ## Build and validation
 
-The Makefile is the only executable contract in this repository. CI calls make targets; customize the Makefile, never the workflows.
+The Makefile is the only executable contract in this repository. CI calls make targets; customize the Makefile, never the workflows. The single exception is runner selection, which GitHub resolves before any make target exists to be called: set the `RUNNER_LABELS` repository variable instead of editing `runs-on` (see `docs/setup/runners.md`).
 
 | Level | Name | Command | When required |
 | --- | --- | --- | --- |
