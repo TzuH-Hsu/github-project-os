@@ -7,8 +7,8 @@ phase, plus the flag reference and troubleshooting.
 Run the script when you can — it's idempotent, so re-running it later syncs
 label drift back to what's declared in `.github/labels.yml`. The branch
 ruleset (`.github/rulesets/main-branch.json`) is create-once, not synced:
-re-running skips phase 7 if `main-branch-protection` already exists. To pick
-up ruleset changes, delete the existing ruleset on GitHub first (see phase 7
+re-running skips phase 8 if `main-branch-protection` already exists. To pick
+up ruleset changes, delete the existing ruleset on GitHub first (see phase 8
 below), then re-run.
 
 ## Flags
@@ -19,7 +19,7 @@ below), then re-run.
 | `--yes` | No prompts; accept defaults for every phase. |
 | `--prune` | Delete undeclared repo labels without prompting (the default answer is already yes; use this to skip the prompt in scripts/CI). |
 | `--skip-project` | Skip Project creation and field setup (phase 4). |
-| `--keep-template-docs` | Skip de-templating (phase 8); keep `docs/template/` and the starter README. |
+| `--keep-template-docs` | Skip de-templating (phase 9); keep `docs/template/` and the starter README. |
 | `--help` | Show usage and exit. |
 
 ## Phases, and their manual equivalent
@@ -175,7 +175,54 @@ and description"**; disable "Allow merge commits" and "Allow rebase merging";
 enable "Always suggest updating pull request branches" and "Automatically
 delete head branches". Under **Features**: Issues on, Wikis off.
 
-### 6. Actions PR permission
+### 6. Security
+
+Reports repository visibility and the state of secret scanning, push
+protection, Dependabot alerts and Dependabot security updates, then offers to
+enable whatever is off — subject to one rule.
+
+**The only settings bootstrap enables here are the ones that are free.**
+Anything with a billing consequence is reported and handed back to you as a
+manual step. Concretely:
+
+- **Public repo** — secret scanning and push protection are free, so the script
+  offers to enable them. Going public does *not* switch them on by itself;
+  push protection in particular has to be enabled explicitly.
+- **Private or internal repo** — the script will **not** enable secret scanning
+  for you at all, under any flag. There it needs a paid GitHub Advanced
+  Security / Secret Protection seat, and committing your account to a
+  per-committer charge is not a setup step. You get the current state, an
+  explanation, and a manual step.
+- **Dependabot alerts and security updates** — free on every plan, so they are
+  offered regardless of visibility. `.github/dependabot.yml` already assumes
+  both are on; until now nothing verified that.
+
+The phase never changes repository visibility and never offers to. Going from
+private to public erases stars and watchers and publishes your entire Actions
+history — a one-way door, not something a setup script should ask about
+in passing.
+
+Two states the summary distinguishes that the GitHub UI blurs: settings that
+are *unreadable* (your token lacks admin on the repo) are reported as unknown
+rather than as disabled, and Dependabot security updates that are enabled but
+**paused** are called out, because paused means no fix PR will ever open.
+
+Since every read runs for real even under `--dry-run`,
+`scripts/bootstrap.sh --dry-run` doubles as a zero-risk security audit of an
+existing repository.
+
+**One thing that sounds alarming and is not:** GitHub's documentation lists
+"all push rulesets will be disabled" among the consequences of making a repo
+public. This template's ruleset (`.github/rulesets/main-branch.json`) has
+`"target": "branch"`, not `"push"`, so it is unaffected — your `main`
+protection survives a visibility change.
+
+Manual: **Settings → Advanced Security**. Enable "Secret scanning" and, under
+it, "Push protection". Enable "Dependabot alerts" and "Dependabot security
+updates". On a private repo the first two require a Secret Protection licence;
+the Dependabot pair are free everywhere.
+
+### 7. Actions PR permission
 
 Enables Actions to create and approve pull requests — required for
 release-please to open its release PR.
@@ -188,7 +235,7 @@ release-please's workflow run fails with:
 GitHub Actions is not permitted to create or approve pull requests.
 ```
 
-### 7. Ruleset
+### 8. Ruleset
 
 Imports `.github/rulesets/main-branch.json` as a repository ruleset named
 `main-branch-protection`, if a ruleset with that name doesn't already exist.
@@ -200,7 +247,7 @@ select `.github/rulesets/main-branch.json`. Review the imported rules (branch
 deletion/force-push blocked, PR required, `ci` status check required) and
 click **Create**.
 
-### 8. De-template
+### 9. De-template
 
 One-time conversion from the template product to your project:
 
@@ -269,6 +316,13 @@ git rev-parse --verify origin/main >/dev/null 2>&1 \
   || echo "remote still has no commits - wait, or delete the directory and clone again" >&2
 ```
 
+**Security settings come back empty / "could not read"** — the
+`security_and_analysis` object is only populated for callers with admin
+permission on the repository, so a token without it sees nothing rather than
+seeing "disabled". Phase 6 reports this as unknown and emits a manual step
+instead of guessing. Check `gh auth status`, and re-run once the token has
+admin, or set the four toggles by hand in **Settings → Advanced Security**.
+
 **"token scopes do not list 'project'"** — the default `gh auth login` token
 doesn't request the `project` scope. Fix: `gh auth refresh -s project`, then
 re-run.
@@ -280,15 +334,15 @@ effect until issue types are enabled at the org level (or the repo is
 transferred into an org that has them).
 
 **Ruleset name conflict** — if a ruleset named `main-branch-protection`
-already exists, the script skips phase 7 rather than overwriting it (syncing
+already exists, the script skips phase 8 rather than overwriting it (syncing
 a ruleset means delete-then-rerun, since there's no partial-update path for
 rule lists via `gh api`). To pick up changes from
 `.github/rulesets/main-branch.json`: delete the existing ruleset in
 **Settings → Rules → Rulesets**, then re-run `scripts/bootstrap.sh`.
 
 **"GitHub Actions is not permitted to create or approve pull requests"** in
-the release-please workflow run — phase 6 was skipped or declined. Enable it
-per the manual step above, or re-run the script and accept the phase 6
+the release-please workflow run — phase 7 was skipped or declined. Enable it
+per the manual step above, or re-run the script and accept the phase 7
 prompt.
 
 ## See also

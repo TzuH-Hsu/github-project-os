@@ -35,5 +35,6 @@ Before merging a release PR:
 
 1. `make verify` green locally; CI green on `main`.
 2. Scratch-repo E2E: create a repo from the template (`gh repo create <scratch> --template ...`), run `scripts/bootstrap.sh --dry-run` then live, re-run to confirm idempotence, run the de-template phase, open one issue per form (native type + labels land), open a trivial PR (CI runs, ruleset enforces), then delete the scratch repo.
-3. Private-info sweep: `grep -riE '<maintainer personal strings>' .` returns nothing (see release-management skill).
-4. Merge release PR (human), then add the hand-written TLDR to the GitHub Release.
+3. Phase 6 security matrix — needs **two** scratch repos, one public and one private. Public: accept the prompts, then assert via `gh api repos/<owner>/<scratch> --jq '.security_and_analysis'` that secret scanning and push protection are on, and re-run to confirm zero further writes. Private: assert the phase issues **zero** PATCH calls for secret scanning and that `security_and_analysis.secret_scanning.status` is unchanged — that is the no-spend guarantee, and it is the only check that proves it.
+4. Private-info sweep: `grep -riE '<maintainer personal strings>' .` returns nothing (see release-management skill).
+5. Merge release PR (human), then add the hand-written TLDR to the GitHub Release.

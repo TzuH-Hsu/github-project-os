@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # bootstrap.sh — one-time (and re-runnable) setup for a repo created from the
 # "GitHub Project OS" template. Applies everything a template can't ship as
-# files: labels, milestone, GitHub Project fields, repo settings, ruleset,
+# files: labels, milestone, GitHub Project fields, repo settings, security
+# settings, ruleset,
 # and (once) converts the repo from template docs to your project docs.
 #
 # Idempotent: re-running syncs label state to what's declared in
 # .github/labels.yml. The branch ruleset is create-once, not synced: if
-# main-branch-protection already exists, phase 7 is skipped rather than
+# main-branch-protection already exists, phase 8 is skipped rather than
 # updated — delete the ruleset on GitHub and re-run to pick up changes to
 # .github/rulesets/main-branch.json.
 #
@@ -86,7 +87,7 @@ Options:
   --prune               Delete repo labels not declared in .github/labels.yml,
                          without prompting (implies the default prune behavior).
   --skip-project        Skip phase 4 (GitHub Project creation / field setup).
-  --keep-template-docs  Skip phase 8 (de-templating); keep docs/template/ and
+  --keep-template-docs  Skip phase 9 (de-templating); keep docs/template/ and
                          the starter README in place.
   --help                Show this help and exit.
 
@@ -97,9 +98,10 @@ Phases:
   3. Milestone          create v0.1.0 if missing
   4. Project            create Project v2 board + Effort field (see --skip-project)
   5. Repo settings       merge strategy, delete-branch-on-merge, wiki off
-  6. Actions permission  enable Actions to create/approve PRs (release-please)
-  7. Ruleset             import .github/rulesets/main-branch.json
-  8. De-template         convert repo from template docs to your project (see --keep-template-docs)
+  6. Security            secret scanning + push protection (public repos), Dependabot alerts
+  7. Actions permission  enable Actions to create/approve PRs (release-please)
+  8. Ruleset             import .github/rulesets/main-branch.json
+  9. De-template         convert repo from template docs to your project (see --keep-template-docs)
 
 Docs: docs/setup/bootstrap.md (manual fallback + reference for every phase).
 EOF
@@ -707,10 +709,159 @@ phase_repo_settings() {
   record_phase "5. Repo settings" "ok"
 }
 
-# --- Phase 6 — Actions PR permission ---
+# --- Phase 6 — Security ---
+
+# Read-mostly by design, and the write path is bounded by COST, not by
+# capability: the only settings this phase ever enables are free by
+# construction. Anything with a billing consequence is reported and handed to
+# the operator as a MANUAL step.
+#
+# Secret scanning is therefore offered only on a PUBLIC repo, where it is free.
+# On a private or internal repo it needs a paid GitHub Advanced Security /
+# Secret Protection seat, so this phase reports and stops rather than creating a
+# per-committer billing obligation on the adopter's account. Dependabot alerts
+# and automated security fixes are free everywhere, so they are offered on any
+# visibility -- and .github/dependabot.yml already asserts both are on, with
+# nothing until now verifying it.
+#
+# This phase NEVER changes repository visibility, and must not learn to. Private
+# -> public erases stars and watchers and publishes all Actions history; that is
+# a one-way door, not a bootstrap decision. Detection only.
+#
+# Unlike phases 3/5/8, this phase runs several independent checks, so it
+# accumulates $result and calls record_phase ONCE at the end (the pattern
+# phase_issue_types uses) -- run_phase's contract wants exactly one record per
+# exit path, not one per check.
+phase_security() {
+  doing "Phase 6: security settings"
+
+  local result="ok"
+
+  # One read, three facts. security_and_analysis is only populated for callers
+  # with admin permission on the repo -- it comes back null otherwise -- so the
+  # "unknown" fallbacks below mean "could not read", never "disabled".
+  # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON error
+  # body to stdout (same failure mode as phase 2's issue-types check).
+  local facts
+  if ! facts="$(gh api "repos/${REPO}" --jq '[.visibility, (.security_and_analysis.secret_scanning.status // "unknown"), (.security_and_analysis.secret_scanning_push_protection.status // "unknown")] | @tsv' 2>/dev/null)"; then
+    facts=""
+  fi
+
+  if [ -z "$facts" ]; then
+    warn "could not read repos/${REPO} security settings — the token may lack admin on this repo"
+    manual "Review Settings → Advanced Security by hand: secret scanning, push protection, Dependabot alerts, Dependabot security updates"
+    record_phase "6. Security" "warn"
+    return
+  fi
+
+  local visibility secret_scanning push_protection
+  visibility="$(printf '%s' "$facts" | cut -f1)"
+  secret_scanning="$(printf '%s' "$facts" | cut -f2)"
+  push_protection="$(printf '%s' "$facts" | cut -f3)"
+  ok "repository visibility: ${visibility}"
+
+  if [ "$visibility" = "public" ]; then
+    if [ "$secret_scanning" = "unknown" ] || [ "$push_protection" = "unknown" ]; then
+      # security_and_analysis is only populated for callers with admin on the
+      # repo. "unknown" therefore means COULD NOT READ, never "disabled" --
+      # prompting here (or PATCHing under --yes) would act on a guess, and the
+      # phase would report a state it never actually observed.
+      warn "cannot read secret scanning state (secret scanning: ${secret_scanning}, push protection: ${push_protection})"
+      warn "  security_and_analysis is only visible to callers with admin on ${REPO}"
+      warn "  this is 'not readable', not 'disabled' — bootstrap will not guess"
+      manual "Check Settings → Advanced Security → Secret scanning and Push protection by hand; bootstrap could not read their current state"
+      result="warn"
+    elif [ "$secret_scanning" = "enabled" ] && [ "$push_protection" = "enabled" ]; then
+      ok "secret scanning + push protection: already enabled"
+    else
+      cat <<'EOF'
+Secret scanning and push protection are free on public repositories. Scanning
+finds credentials already committed; push protection blocks a push that would
+add a new one. Neither is switched on by converting a repo from private to
+public — push protection in particular has to be enabled explicitly.
+EOF
+      if confirm "Enable secret scanning and push protection on ${REPO}?" "y"; then
+        # security_and_analysis is a nested object. gh's key[subkey]=value
+        # syntax builds it, which keeps the whole call inside run_or_dry and
+        # visible under --dry-run instead of needing a piped JSON body.
+        if run_or_dry gh api -X PATCH "repos/${REPO}" \
+          -f 'security_and_analysis[secret_scanning][status]=enabled' \
+          -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'; then
+          ok "secret scanning + push protection enabled"
+        else
+          warn "secret scanning PATCH failed — needs admin on ${REPO}"
+          manual "Enable Settings → Advanced Security → Secret scanning and Push protection"
+          result="warn"
+        fi
+      else
+        skip "secret scanning + push protection (both free on this public repo)"
+        manual "Enable Settings → Advanced Security → Secret scanning and Push protection"
+        result="warn"
+      fi
+    fi
+  else
+    warn "repository is ${visibility}: secret scanning (${secret_scanning}), push protection (${push_protection})"
+    warn "  on a private/internal repo these need a paid GitHub Advanced Security / Secret Protection seat"
+    warn "  bootstrap will not enable them for you — that is a billing decision, not a setup step"
+    manual "Private repo: decide whether to license GitHub Secret Protection, then enable secret scanning + push protection in Settings → Advanced Security"
+    result="warn"
+  fi
+
+  # GET returns 204 when enabled and 404 when not, so the exit code IS the
+  # answer -- but a 403 (a token without admin) also exits non-zero, so the
+  # wording covers "or not visible" rather than asserting the wrong one.
+  if gh api "repos/${REPO}/vulnerability-alerts" >/dev/null 2>&1; then
+    ok "Dependabot alerts: enabled"
+  elif confirm "Enable Dependabot alerts? (free on every plan; .github/dependabot.yml assumes it)" "y"; then
+    if run_or_dry gh api -X PUT "repos/${REPO}/vulnerability-alerts"; then
+      ok "Dependabot alerts enabled"
+    else
+      warn "could not enable Dependabot alerts — needs admin on ${REPO}, or they are not visible to this token"
+      manual "Enable Settings → Advanced Security → Dependabot alerts"
+      result="warn"
+    fi
+  else
+    skip "Dependabot alerts"
+    manual "Enable Settings → Advanced Security → Dependabot alerts (.github/dependabot.yml assumes it is on)"
+    result="warn"
+  fi
+
+  # {"enabled":bool,"paused":bool}. Enabled-but-paused is a real state and must
+  # not be reported as plain "enabled" — paused means no fix PRs ever open.
+  local fixes_facts fixes paused
+  if ! fixes_facts="$(gh api "repos/${REPO}/automated-security-fixes" --jq '[.enabled, .paused] | @tsv' 2>/dev/null)"; then
+    fixes_facts=""
+  fi
+  fixes="$(printf '%s' "$fixes_facts" | cut -f1)"
+  paused="$(printf '%s' "$fixes_facts" | cut -f2)"
+
+  if [ "$fixes" = "true" ] && [ "$paused" = "true" ]; then
+    warn "Dependabot security updates: enabled but PAUSED — no automatic fix PRs will open"
+    manual "Un-pause Dependabot security updates in Settings → Advanced Security"
+    result="warn"
+  elif [ "$fixes" = "true" ]; then
+    ok "Dependabot security updates: enabled"
+  elif confirm "Enable Dependabot security updates (automated security fixes)?" "y"; then
+    if run_or_dry gh api -X PUT "repos/${REPO}/automated-security-fixes"; then
+      ok "Dependabot security updates enabled"
+    else
+      warn "could not enable Dependabot security updates — needs admin, and Dependabot alerts must be on first"
+      manual "Enable Settings → Advanced Security → Dependabot security updates"
+      result="warn"
+    fi
+  else
+    skip "Dependabot security updates"
+    manual "Enable Settings → Advanced Security → Dependabot security updates"
+    result="warn"
+  fi
+
+  record_phase "6. Security" "$result"
+}
+
+# --- Phase 7 — Actions PR permission ---
 
 phase_actions_permission() {
-  doing "Phase 6: Actions PR creation/approval permission"
+  doing "Phase 7: Actions PR creation/approval permission"
 
   cat <<'EOF'
 release-please opens and updates its own release PR from a workflow run. By
@@ -730,25 +881,25 @@ EOF
     run_or_dry gh api -X PUT "repos/${REPO}/actions/permissions/workflow" \
       -f default_workflow_permissions=read \
       -F can_approve_pull_request_reviews=true \
-      || { fail "gh api Actions permissions PUT failed"; record_phase "6. Actions permission" "fail"; return 1; }
+      || { fail "gh api Actions permissions PUT failed"; record_phase "7. Actions permission" "fail"; return 1; }
     ok "Actions can now create and approve pull requests"
-    record_phase "6. Actions permission" "ok"
+    record_phase "7. Actions permission" "ok"
   else
     skip "Actions PR permission (release-please will fail until this is enabled)"
     manual "Enable Settings → Actions → General → 'Allow GitHub Actions to create and approve pull requests', or release-please will fail"
-    record_phase "6. Actions permission" "skip"
+    record_phase "7. Actions permission" "skip"
   fi
 }
 
-# --- Phase 7 — Ruleset ---
+# --- Phase 8 — Ruleset ---
 
 phase_ruleset() {
-  doing "Phase 7: branch ruleset"
+  doing "Phase 8: branch ruleset"
 
   local ruleset_file=".github/rulesets/main-branch.json"
   if [ ! -f "$ruleset_file" ]; then
     warn "no ${ruleset_file} found — skipping ruleset import"
-    record_phase "7. Ruleset" "skip"
+    record_phase "8. Ruleset" "skip"
     return
   fi
 
@@ -762,17 +913,17 @@ phase_ruleset() {
 
   if printf '%s\n' "$existing" | grep -qxF "main-branch-protection"; then
     ok "ruleset 'main-branch-protection' already exists — rulesets are create-once, this run will NOT sync changes; delete it on GitHub (Settings → Rules → Rulesets) and re-run to update"
-    record_phase "7. Ruleset" "skip"
+    record_phase "8. Ruleset" "skip"
     return
   fi
 
   run_or_dry gh api -X POST "repos/${REPO}/rulesets" --input "$ruleset_file" \
-    || { fail "gh api ruleset POST failed"; record_phase "7. Ruleset" "fail"; return 1; }
+    || { fail "gh api ruleset POST failed"; record_phase "8. Ruleset" "fail"; return 1; }
   ok "ruleset 'main-branch-protection' created"
-  record_phase "7. Ruleset" "ok"
+  record_phase "8. Ruleset" "ok"
 }
 
-# --- Phase 8 — De-template ---
+# --- Phase 9 — De-template ---
 
 CHANGELOG_SEED='# Changelog
 
@@ -786,16 +937,16 @@ No entries yet.
 
 phase_detemplate() {
   if [ "$KEEP_TEMPLATE_DOCS" -eq 1 ]; then
-    skip "Phase 8: de-template (--keep-template-docs)"
-    record_phase "8. De-template" "skip"
+    skip "Phase 9: de-template (--keep-template-docs)"
+    record_phase "9. De-template" "skip"
     return
   fi
 
-  doing "Phase 8: de-template"
+  doing "Phase 9: de-template"
 
   if [ ! -d "docs/template" ]; then
     ok "docs/template/ absent — repo is already de-templated, nothing to do"
-    record_phase "8. De-template" "skip"
+    record_phase "9. De-template" "skip"
     return
   fi
 
@@ -810,7 +961,7 @@ phase_detemplate() {
   if [ -n "$dirty_paths" ]; then
     warn "de-template skipped: affected paths have uncommitted changes — commit or stash first"
     printf '%s\n' "$dirty_paths" | sed 's/^/  /'
-    record_phase "8. De-template" "skip"
+    record_phase "9. De-template" "skip"
     return
   fi
 
@@ -829,7 +980,7 @@ EOF
 
   if [ "$do_detemplate" -eq 0 ]; then
     skip "de-templating"
-    record_phase "8. De-template" "skip"
+    record_phase "9. De-template" "skip"
     return
   fi
 
@@ -851,12 +1002,12 @@ EOF
         ok "README.md replaced with ${readme_source}"
       else
         fail "mv reported success but README.md / ${readme_source} state is not as expected — refusing to remove docs/template/"
-        record_phase "8. De-template" "fail"
+        record_phase "9. De-template" "fail"
         return 1
       fi
     else
       fail "mv ${readme_source} README.md failed — refusing to remove docs/template/"
-      record_phase "8. De-template" "fail"
+      record_phase "9. De-template" "fail"
       return 1
     fi
   else
@@ -866,19 +1017,19 @@ EOF
 
   if [ "$safe_to_remove_template" -ne 1 ]; then
     fail "de-template: mv step did not verify as safe — aborting before docs/template/ removal"
-    record_phase "8. De-template" "fail"
+    record_phase "9. De-template" "fail"
     return 1
   fi
 
   run_or_dry rm -rf docs/template \
-    || { fail "rm -rf docs/template failed"; record_phase "8. De-template" "fail"; return 1; }
+    || { fail "rm -rf docs/template failed"; record_phase "9. De-template" "fail"; return 1; }
   ok "docs/template/ removed"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '%s[dry-run]%s would reset CHANGELOG.md to its 8-line seed\n' "$C_YELLOW" "$C_RESET"
   else
     printf '%s' "$CHANGELOG_SEED" > CHANGELOG.md \
-      || { fail "writing CHANGELOG.md failed"; record_phase "8. De-template" "fail"; return 1; }
+      || { fail "writing CHANGELOG.md failed"; record_phase "9. De-template" "fail"; return 1; }
   fi
   ok "CHANGELOG.md reset to seed"
 
@@ -895,7 +1046,7 @@ EOF
       printf '%s[dry-run]%s would rewrite %s to {".": "0.0.0"}\n' "$C_YELLOW" "$C_RESET" "$manifest"
     else
       printf '{\n  ".": "0.0.0"\n}\n' > "$manifest" \
-        || { fail "writing ${manifest} failed"; record_phase "8. De-template" "fail"; return 1; }
+        || { fail "writing ${manifest} failed"; record_phase "9. De-template" "fail"; return 1; }
     fi
     ok "${manifest} rewritten to {\".\": \"0.0.0\"}"
   fi
@@ -908,7 +1059,7 @@ follow normal Conventional Commit bumps.
 EOF
   manual "Remove the 'release-as: 0.1.0' key from release-please-config.json after your first release ships"
 
-  record_phase "8. De-template" "ok"
+  record_phase "9. De-template" "ok"
 }
 
 # --- Summary ---
@@ -974,16 +1125,17 @@ run_phase() {
 main() {
   phase_preflight
 
-  # Phases 1-8: failures are collected, not fatal — preflight is the only
+  # Phases 1-9: failures are collected, not fatal — preflight is the only
   # phase whose failure aborts the whole run.
   run_phase phase_labels "1. Labels"
   run_phase phase_issue_types "2. Issue types"
   run_phase phase_milestone "3. Milestone"
   run_phase phase_project "4. Project"
   run_phase phase_repo_settings "5. Repo settings"
-  run_phase phase_actions_permission "6. Actions permission"
-  run_phase phase_ruleset "7. Ruleset"
-  run_phase phase_detemplate "8. De-template"
+  run_phase phase_security "6. Security"
+  run_phase phase_actions_permission "7. Actions permission"
+  run_phase phase_ruleset "8. Ruleset"
+  run_phase phase_detemplate "9. De-template"
 
   print_summary
 }
