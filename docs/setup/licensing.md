@@ -127,6 +127,9 @@ this trailer.
 
 ## NOTICE (the text bootstrap writes)
 
+The copyright line here is the **template's**, not yours, and that is the whole
+point — this file exists to carry the upstream notice. Do not substitute your own
+name into it; your identity belongs in `LICENSE`.
 ```text
 NOTICE — third-party attribution
 
@@ -147,7 +150,7 @@ GitHub Project OS — https://github.com/TzuH-Hsu/github-project-os
 
 MIT License
 
-Copyright (c) __YEAR__ __HOLDER__
+Copyright (c) 2026 TzuH-Hsu
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
