@@ -30,6 +30,10 @@ name: CI
 #
 #   gh variable delete RUNNER_LABELS
 #
+# Self-hosted runners are NOT safe here while this repository is public: this
+# workflow runs on pull_request, which includes fork PRs, and it checks out and
+# executes the PR's own Makefile and scripts. See docs/setup/runners.md.
+#
 # See docs/setup/runners.md before setting it.
 
 on:

@@ -1060,6 +1060,38 @@ this trailer.
 --------------------------------------------------------------------------
 '
 
+# subst_all <haystack> <needle> <replacement> -- literal, no pattern semantics.
+#
+# ${var//needle/repl} is NOT usable here. With patsub_replacement (on by
+# default in bash 5.2+) an unescaped `&` in the REPLACEMENT expands to the
+# matched text, so a holder like "Smith & Jones" renders as
+# "Smith __HOLDER__ Jones" -- silently corrupting the copyright line of a
+# LICENSE file. Escaping it as \& is itself literal on bash 3.2 (macOS
+# /bin/bash), so no single expansion is correct on both. Prefix/suffix removal
+# never interprets the replacement at all, on any version.
+#
+# Callers use $(subst_all ...), and command substitution strips ALL trailing
+# newlines -- so a caller writing the result to a file must re-add one
+# (printf '%s\\n'), and callers concatenating must not rely on the seed's
+# trailing newline surviving.
+subst_all() {
+  local haystack="$1" needle="$2" repl="$3" out="" head
+  while [ -n "$haystack" ]; do
+    case "$haystack" in
+      *"$needle"*)
+        head="${haystack%%"$needle"*}"
+        out="${out}${head}${repl}"
+        haystack="${haystack#*"$needle"}"
+        ;;
+      *)
+        out="${out}${haystack}"
+        haystack=""
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 license_explain() {
   cat <<'EOF'
 
@@ -1152,14 +1184,25 @@ prompt_license_holder() {
 # the only copy of it in the repository, which MIT forbids. Created only when
 # absent: an adopter who has added their own third-party sections keeps them.
 write_notice() {
+  # File existence is NOT proof the template's notice is present: an adopter may
+  # already keep a NOTICE for their own dependencies. Returning early there would
+  # replace LICENSE while dropping the only copy of the upstream MIT notice --
+  # exactly the violation this phase exists to prevent. Check for the notice
+  # itself, and append rather than overwrite.
+  local upstream_line="Copyright (c) ${TEMPLATE_COPYRIGHT_YEAR} ${TEMPLATE_COPYRIGHT_HOLDER}"
+  local append=0
   if [ -f NOTICE ]; then
-    ok "NOTICE already exists — not overwriting"
-    return 0
+    if grep -qxF "$upstream_line" NOTICE; then
+      ok "NOTICE already carries the ${TEMPLATE_NAME} attribution — leaving it alone"
+      return 0
+    fi
+    append=1
+    ok "NOTICE exists without the ${TEMPLATE_NAME} attribution — appending, keeping your content"
   fi
 
   local mit_upstream body
-  mit_upstream="${LICENSE_MIT_SEED//__YEAR__/$TEMPLATE_COPYRIGHT_YEAR}"
-  mit_upstream="${mit_upstream//__HOLDER__/$TEMPLATE_COPYRIGHT_HOLDER}"
+  mit_upstream="$(subst_all "$LICENSE_MIT_SEED" "__YEAR__" "$TEMPLATE_COPYRIGHT_YEAR")"
+  mit_upstream="$(subst_all "$mit_upstream" "__HOLDER__" "$TEMPLATE_COPYRIGHT_HOLDER")"
 
   body="NOTICE — third-party attribution
 
@@ -1178,15 +1221,26 @@ other part of this repository; see LICENSE for those.
 --------------------------------------------------------------------------
 ${TEMPLATE_NAME} — ${TEMPLATE_URL}
 
-${mit_upstream}--------------------------------------------------------------------------
+${mit_upstream}
+--------------------------------------------------------------------------
 "
 
   if [ "$DRY_RUN" -eq 1 ]; then
-    printf '%s[dry-run]%s would create NOTICE (MIT attribution for %s)\n' "$C_YELLOW" "$C_RESET" "$TEMPLATE_NAME"
+    if [ "$append" -eq 1 ]; then
+      printf '%s[dry-run]%s would append the %s MIT attribution to the existing NOTICE\n' "$C_YELLOW" "$C_RESET" "$TEMPLATE_NAME"
+    else
+      printf '%s[dry-run]%s would create NOTICE (MIT attribution for %s)\n' "$C_YELLOW" "$C_RESET" "$TEMPLATE_NAME"
+    fi
     return 0
   fi
-  printf '%s' "$body" > NOTICE || { fail "writing NOTICE failed"; return 1; }
-  ok "NOTICE created (MIT attribution for ${TEMPLATE_NAME})"
+
+  if [ "$append" -eq 1 ]; then
+    printf '\n%s' "$body" >> NOTICE || { fail "appending to NOTICE failed"; return 1; }
+    ok "NOTICE appended (MIT attribution for ${TEMPLATE_NAME}; existing content kept)"
+  else
+    printf '%s' "$body" > NOTICE || { fail "writing NOTICE failed"; return 1; }
+    ok "NOTICE created (MIT attribution for ${TEMPLATE_NAME})"
+  fi
 }
 
 phase_license() {
@@ -1248,8 +1302,8 @@ phase_license() {
     proprietary) rendered="$LICENSE_PROPRIETARY_SEED" ;;
     *)           fail "unreachable licence choice '${LICENSE_CHOICE}'"; record_phase "9. Licence" "fail"; return 1 ;;
   esac
-  rendered="${rendered//__YEAR__/$year}"
-  rendered="${rendered//__HOLDER__/$LICENSE_HOLDER}"
+  rendered="$(subst_all "$rendered" "__YEAR__" "$year")"
+  rendered="$(subst_all "$rendered" "__HOLDER__" "$LICENSE_HOLDER")"
 
   # A plain redirect, not run_or_dry: that helper is the choke point for
   # mutating `gh` calls, and the CHANGELOG/manifest writes in phase 10 branch
@@ -1258,7 +1312,7 @@ phase_license() {
     printf '%s[dry-run]%s would write LICENSE (%s, copyright %s %s)\n' \
       "$C_YELLOW" "$C_RESET" "$LICENSE_CHOICE" "$year" "$LICENSE_HOLDER"
   else
-    printf '%s' "$rendered" > LICENSE \
+    printf '%s\n' "$rendered" > LICENSE \
       || { fail "writing LICENSE failed"; record_phase "9. Licence" "fail"; return 1; }
   fi
   ok "LICENSE written (${LICENSE_CHOICE}, copyright ${year} ${LICENSE_HOLDER})"

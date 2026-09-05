@@ -17,6 +17,10 @@ called — so it is the one adopter-facing knob the Makefile cannot own.
 
 ## Setting it
 
+Before setting it to a self-hosted runner, read the security note below — on a
+public repository that combination lets anyone who opens a pull request run code
+on your machine.
+
 The value is a **JSON array**, not a bare string:
 
 ```bash
@@ -73,7 +77,32 @@ which reads like a broken script rather than a misconfigured variable.
 Supporting other architectures means adding per-tool asset names to that script,
 not relaxing the guard.
 
-## Self-hosted runners: read this first
+## Self-hosted runners: do not use them on a public repository
+
+**This is a security boundary, not a preference.** `.github/workflows/ci.yml`
+triggers on every `pull_request`. On a **public** repository that includes pull
+requests from forks, and the job checks out the pull request's own tree and then
+runs `make ci-tools` and `make ci-pr` from it. Anyone on the internet who opens
+a pull request therefore executes their own `Makefile` and their own
+`scripts/` on your machine — with your filesystem, your network position, and
+any credentials reachable from that host. Ephemeral cleanup does not help: the
+damage happens while the job is running.
+
+GitHub's default "require approval for first-time contributors" narrows the
+window; it does not close it, because approval is per-contributor, not
+per-diff, and a returning contributor's next pull request runs unreviewed.
+
+So: **on a public repository, leave `RUNNER_LABELS` unset.** If you genuinely
+need self-hosted CI on public code, the only safe shapes are to make the
+repository private, or to split the workflow so that fork pull requests stay on
+GitHub-hosted runners and self-hosted runners only ever run on `push` to
+branches you control. That second option is a real workflow change, not a
+variable.
+
+On a **private** repository, where every contributor already has write access,
+the rest of this section applies.
+
+### Operational caveats, private repositories
 
 Even a *compatible* self-hosted Linux x86_64 runner behaves differently from a
 hosted one, because a hosted runner is destroyed after every job and yours is
