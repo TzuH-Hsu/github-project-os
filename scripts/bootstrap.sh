@@ -11,7 +11,7 @@
 # updated — delete the ruleset on GitHub and re-run to pick up changes to
 # .github/rulesets/main-branch.json.
 #
-# Usage: scripts/bootstrap.sh [--dry-run] [--yes] [--prune]
+# Usage: scripts/bootstrap.sh [--dry-run] [--yes] [--prune] [--license MODE]
 #                              [--skip-project] [--keep-template-docs] [--help]
 #
 # bash 3.2 portable (macOS default /bin/bash). No arrays-of-arrays, no
@@ -25,6 +25,9 @@ ASSUME_YES=0
 PRUNE_LABELS=0
 SKIP_PROJECT=0
 KEEP_TEMPLATE_DOCS=0
+LICENSE_MODE=""
+LICENSE_CHOICE=""
+LICENSE_HOLDER=""
 REPO=""       # owner/name
 OWNER=""
 REPO_NAME=""
@@ -34,6 +37,12 @@ REPO_NAME=""
 PHASE_NAMES=""
 PHASE_RESULTS=""
 MANUAL_STEPS=""
+# Manual steps that are unsafe to defer. Rendered ABOVE MANUAL_STEPS in the
+# summary regardless of which phase recorded them, because MANUAL_STEPS is
+# appended in phase order and the licence decision runs second-to-last.
+# Reserved for steps where shipping without doing them is a defect, not an
+# inconvenience.
+MANUAL_URGENT=""
 
 # --- colors (disabled when not a tty) ---
 if [ -t 1 ]; then
@@ -53,6 +62,8 @@ skip()   { printf '%sskip%s %s\n' "$C_YELLOW" "$C_RESET" "$1"; }
 warn()   { printf '%sWARN%s %s\n' "$C_YELLOW" "$C_RESET" "$1" >&2; }
 fail()   { printf '%sFAIL%s %s\n' "$C_RED" "$C_RESET" "$1" >&2; }
 manual() { printf '%sMANUAL%s %s\n' "$C_BOLD" "$C_RESET" "$1"; MANUAL_STEPS="${MANUAL_STEPS}- ${1}
+"; }
+manual_urgent() { printf '%sMANUAL (do this first)%s %s\n' "$C_RED" "$C_RESET" "$1"; MANUAL_URGENT="${MANUAL_URGENT}- ${1}
 "; }
 
 record_phase() {
@@ -87,7 +98,9 @@ Options:
   --prune               Delete repo labels not declared in .github/labels.yml,
                          without prompting (implies the default prune behavior).
   --skip-project        Skip phase 4 (GitHub Project creation / field setup).
-  --keep-template-docs  Skip phase 9 (de-templating); keep docs/template/ and
+  --license MODE        Choose the licence non-interactively: mit | proprietary | defer.
+                        Without it, --yes defers and files the decision first.
+  --keep-template-docs  Skip phase 10 (de-templating); keep docs/template/ and
                          the starter README in place.
   --help                Show this help and exit.
 
@@ -101,13 +114,25 @@ Phases:
   6. Security            secret scanning + push protection (public repos), Dependabot alerts
   7. Actions permission  enable Actions to create/approve PRs (release-please)
   8. Ruleset             import .github/rulesets/main-branch.json
-  9. De-template         convert repo from template docs to your project (see --keep-template-docs)
+  9. Licence             choose YOUR licence; write NOTICE attribution
+ 10. De-template         convert repo from template docs to your project (see --keep-template-docs)
 
 Docs: docs/setup/bootstrap.md (manual fallback + reference for every phase).
 EOF
 }
 
 # --- arg parsing ---
+# True only when this file is executed, not sourced. Sourcing must define
+# functions and touch nothing else: without this the top-level argument parser
+# below consumes the CALLER's positional parameters, and an ordinary caller
+# argument is treated as an unknown bootstrap option and calls exit 1 -- which
+# terminates the sourcing shell.
+#
+# Caveat that remains by design: sourcing still applies `set -euo pipefail` to
+# the caller. Source from a subshell if that matters.
+bootstrap_is_main() { [ "${BASH_SOURCE[0]}" = "$0" ]; }
+
+if bootstrap_is_main; then
 while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1 ;;
@@ -115,6 +140,17 @@ while [ $# -gt 0 ]; do
     --prune) PRUNE_LABELS=1 ;;
     --skip-project) SKIP_PROJECT=1 ;;
     --keep-template-docs) KEEP_TEMPLATE_DOCS=1 ;;
+    --license)
+      shift
+      if [ $# -eq 0 ]; then
+        fail "--license requires a value: mit | proprietary | defer"
+        exit 1
+      fi
+      case "$1" in
+        mit|proprietary|defer) LICENSE_MODE="$1" ;;
+        *) fail "--license: unknown value '$1' (use mit, proprietary, or defer)"; exit 1 ;;
+      esac
+      ;;
     --help|-h) usage; exit 0 ;;
     *)
       fail "unknown option: $1"
@@ -124,6 +160,7 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+fi
 
 # confirm <prompt> <default: y|n> → returns 0 for yes, 1 for no. Always
 # yes under --yes.
@@ -923,7 +960,372 @@ phase_ruleset() {
   record_phase "8. Ruleset" "ok"
 }
 
-# --- Phase 9 — De-template ---
+# --- Phase 9 — Licence ---
+
+# Identity of the TEMPLATE this repository was created from. These must match
+# LICENSE; scripts/check-license-marker.sh asserts the first two on every
+# `make check`. Anyone forking this template into a template of their own MUST
+# update them together -- if they drift, phase 9 stops recognising its own
+# licence and silently does nothing, which is the exact defect it exists to
+# prevent.
+TEMPLATE_COPYRIGHT_HOLDER="TzuH-Hsu"
+TEMPLATE_COPYRIGHT_YEAR="2026"
+TEMPLATE_NAME="GitHub Project OS"
+TEMPLATE_URL="https://github.com/TzuH-Hsu/github-project-os"
+
+# __YEAR__ / __HOLDER__ are substituted with bash parameter expansion, NOT sed:
+# holder names legitimately contain & and /, both sed replacement
+# metacharacters. The MIT body lives here exactly once and is reused for both
+# the adopter's LICENSE (answer 1) and the upstream attribution in NOTICE
+# (every writing answer).
+LICENSE_MIT_SEED='MIT License
+
+Copyright (c) __YEAR__ __HOLDER__
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+'
+
+# Deliberately NOT shipped as docs/template/LICENSE.proprietary.example: under
+# --yes this phase writes nothing and files a manual step, and phase 10 then
+# removes docs/template/ -- deleting the example in the very run that told the
+# adopter to go read it. It is reproduced in docs/setup/licensing.md, which
+# survives de-templating.
+LICENSE_PROPRIETARY_SEED='PROPRIETARY SOFTWARE -- ALL RIGHTS RESERVED
+
+Copyright (c) __YEAR__ __HOLDER__. All rights reserved.
+
+1. No licence granted
+
+   This repository and its contents (the "Work") are proprietary and
+   confidential. No licence, express or implied, is granted by this file. You
+   may not use, copy, modify, merge, publish, distribute, sublicense, sell, or
+   create derivative works of the Work, in whole or in part, except under a
+   separate written agreement signed by the copyright holder named above.
+
+2. Commissioned work
+
+   If the Work was produced under a commission, services, or work-for-hire
+   agreement, that agreement -- not this file -- determines who owns the Work
+   and when ownership or a licence passes to the commissioning party (commonly
+   on final payment). Until the conditions of that agreement are met, all
+   rights remain with the copyright holder named above. This file does not
+   transfer, assign, or waive anything, and it does not modify that agreement.
+
+3. Third-party components
+
+   The scaffolding in this repository derives from third-party open-source
+   software, which remains under its own licence. See the NOTICE file.
+   Sections 1 and 2 do not apply to those components, and nothing in NOTICE
+   grants any right in the rest of the Work.
+
+4. No warranty
+
+   THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW.
+
+--------------------------------------------------------------------------
+Template-generated example -- NOT LEGAL ADVICE.
+
+This file was written into your repository by scripts/bootstrap.sh from a
+generic example shipped with a project template. It has not been reviewed by a
+lawyer, it is not tailored to your jurisdiction, your business, or your
+contract, and a notice file cannot override, replace, or complete the terms of
+a signed agreement. Have your own counsel review it. Once they have, delete
+this trailer.
+--------------------------------------------------------------------------
+'
+
+# subst_all <haystack> <needle> <replacement> -- literal, no pattern semantics.
+#
+# ${var//needle/repl} is NOT usable here. With patsub_replacement (on by
+# default in bash 5.2+) an unescaped `&` in the REPLACEMENT expands to the
+# matched text, so a holder like "Smith & Jones" renders as
+# "Smith __HOLDER__ Jones" -- silently corrupting the copyright line of a
+# LICENSE file. Escaping it as \& is itself literal on bash 3.2 (macOS
+# /bin/bash), so no single expansion is correct on both. Prefix/suffix removal
+# never interprets the replacement at all, on any version.
+#
+# Callers use $(subst_all ...), and command substitution strips ALL trailing
+# newlines -- so a caller writing the result to a file must re-add one
+# (printf '%s\\n'), and callers concatenating must not rely on the seed's
+# trailing newline surviving.
+subst_all() {
+  local haystack="$1" needle="$2" repl="$3" out="" head
+  while [ -n "$haystack" ]; do
+    case "$haystack" in
+      *"$needle"*)
+        head="${haystack%%"$needle"*}"
+        out="${out}${head}${repl}"
+        haystack="${haystack#*"$needle"}"
+        ;;
+      *)
+        out="${out}${haystack}"
+        haystack=""
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+license_explain() {
+  cat <<'EOF'
+
+This repository still carries the TEMPLATE's licence: MIT, copyright the
+template author. That is almost certainly not what you want.
+
+  - MIT is an irrevocable grant. Anyone who obtains a copy may use, modify,
+    publish, distribute, sublicense and SELL it. Publishing it once cannot be
+    undone.
+  - For client or commissioned work this is usually wrong, and can conflict
+    with your contract: a commission agreement normally transfers copyright on
+    final payment, while an MIT file in the delivered repo grants the client
+    (and everyone else) far more than that -- before you have been paid.
+  - Even if you do want MIT, the copyright line must name YOU, not the
+    template author.
+
+  1) MIT, under your name
+     Keeps the MIT terms, rewrites the copyright line to you.
+  2) Proprietary / all rights reserved
+     For client, commissioned and closed-source work. Replaces LICENSE with an
+     all-rights-reserved notice that defers to your commission agreement.
+  3) Decide later
+     Leaves LICENSE untouched (still the template author's MIT) and puts this
+     at the TOP of the remaining manual steps.
+
+Choosing something else entirely (Apache-2.0, GPL, BUSL...) is answer 3: pick
+the text yourself. This script ships no other licence bodies.
+
+Either way, a NOTICE file records that this repository's scaffolding derives
+from the template under the MIT licence. That attribution must be kept even if
+you relicense -- see docs/setup/licensing.md.
+EOF
+}
+
+# Sets LICENSE_CHOICE to mit|proprietary|defer. Deliberately has NO default: a
+# bare Enter re-asks. confirm() treats a closed stdin as "take the default",
+# which here would mean silently shipping the template author's MIT -- the
+# original bug with extra steps. A closed stdin, or three unusable answers,
+# resolves to defer, and defer never writes.
+prompt_license_choice() {
+  local reply attempts=0
+  while [ "$attempts" -lt 3 ]; do
+    attempts=$((attempts + 1))
+    printf '\nChoose 1, 2 or 3: '
+    if ! read -r reply; then
+      printf '\n'
+      warn "stdin closed — deferring the licence decision"
+      LICENSE_CHOICE="defer"
+      return 0
+    fi
+    case "$reply" in
+      1|mit|MIT)     LICENSE_CHOICE="mit";         return 0 ;;
+      2|proprietary) LICENSE_CHOICE="proprietary"; return 0 ;;
+      3|defer|later) LICENSE_CHOICE="defer";       return 0 ;;
+      '') printf 'No default here — type 1, 2 or 3.\n' ;;
+      *)  printf 'Please answer 1, 2 or 3.\n' ;;
+    esac
+  done
+  warn "no valid answer after 3 attempts — deferring the licence decision"
+  LICENSE_CHOICE="defer"
+}
+
+# Sets LICENSE_HOLDER. Preference: an interactive answer, then
+# `git config user.name`, then the GitHub owner login. The login is a last
+# resort and gets a WARN, because a handle is not the legal entity a copyright
+# line should name (in this very repo the two differ).
+prompt_license_holder() {
+  local default_holder reply
+  default_holder="$(git config user.name 2>/dev/null || true)"
+  if [ -z "$default_holder" ]; then
+    default_holder="$OWNER"
+    warn "git config user.name is unset — defaulting to the repo owner login '${OWNER}'"
+  fi
+
+  if [ "$ASSUME_YES" -eq 1 ] || [ -n "$LICENSE_MODE" ]; then
+    LICENSE_HOLDER="$default_holder"
+    ok "copyright holder: ${LICENSE_HOLDER} (non-interactive)"
+    manual "Confirm the copyright holder in LICENSE is your correct legal name or company — bootstrap used '${LICENSE_HOLDER}' without asking"
+    return 0
+  fi
+
+  printf 'Copyright holder (your legal name or company) [%s]: ' "$default_holder"
+  if ! read -r reply; then reply=""; printf '\n'; fi
+  [ -n "$reply" ] || reply="$default_holder"
+  LICENSE_HOLDER="$reply"
+}
+
+# NOTICE carries the TEMPLATE's MIT notice, which the adopter must retain even
+# after relicensing -- rewriting LICENSE's copyright line would otherwise delete
+# the only copy of it in the repository, which MIT forbids. Created only when
+# absent: an adopter who has added their own third-party sections keeps them.
+write_notice() {
+  # File existence is NOT proof the template's notice is present: an adopter may
+  # already keep a NOTICE for their own dependencies. Returning early there would
+  # replace LICENSE while dropping the only copy of the upstream MIT notice --
+  # exactly the violation this phase exists to prevent. Check for the notice
+  # itself, and append rather than overwrite.
+  local upstream_line="Copyright (c) ${TEMPLATE_COPYRIGHT_YEAR} ${TEMPLATE_COPYRIGHT_HOLDER}"
+  local append=0
+  if [ -f NOTICE ]; then
+    if grep -qxF "$upstream_line" NOTICE; then
+      ok "NOTICE already carries the ${TEMPLATE_NAME} attribution — leaving it alone"
+      return 0
+    fi
+    append=1
+    ok "NOTICE exists without the ${TEMPLATE_NAME} attribution — appending, keeping your content"
+  fi
+
+  local mit_upstream body
+  mit_upstream="$(subst_all "$LICENSE_MIT_SEED" "__YEAR__" "$TEMPLATE_COPYRIGHT_YEAR")"
+  mit_upstream="$(subst_all "$mit_upstream" "__HOLDER__" "$TEMPLATE_COPYRIGHT_HOLDER")"
+
+  body="NOTICE — third-party attribution
+
+This repository's scaffolding — the GitHub Actions workflows, issue and pull
+request templates, Makefile, scripts/, skills/, and the docs/ structure —
+derives from ${TEMPLATE_NAME} and is used under the MIT Licence.
+
+The MIT Licence requires that its copyright notice and permission notice be
+included in all copies or substantial portions of that software. They are
+reproduced below for that purpose, and must be kept in this repository even if
+the rest of it is relicensed.
+
+The terms below apply ONLY to that scaffolding. They grant no rights in any
+other part of this repository; see LICENSE for those.
+
+--------------------------------------------------------------------------
+${TEMPLATE_NAME} — ${TEMPLATE_URL}
+
+${mit_upstream}
+--------------------------------------------------------------------------
+"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    if [ "$append" -eq 1 ]; then
+      printf '%s[dry-run]%s would append the %s MIT attribution to the existing NOTICE\n' "$C_YELLOW" "$C_RESET" "$TEMPLATE_NAME"
+    else
+      printf '%s[dry-run]%s would create NOTICE (MIT attribution for %s)\n' "$C_YELLOW" "$C_RESET" "$TEMPLATE_NAME"
+    fi
+    return 0
+  fi
+
+  if [ "$append" -eq 1 ]; then
+    printf '\n%s' "$body" >> NOTICE || { fail "appending to NOTICE failed"; return 1; }
+    ok "NOTICE appended (MIT attribution for ${TEMPLATE_NAME}; existing content kept)"
+  else
+    printf '%s' "$body" > NOTICE || { fail "writing NOTICE failed"; return 1; }
+    ok "NOTICE created (MIT attribution for ${TEMPLATE_NAME})"
+  fi
+}
+
+phase_license() {
+  doing "Phase 9: licence"
+
+  if [ ! -f LICENSE ]; then
+    warn "no LICENSE file in this repo"
+    manual_urgent "This repository has no LICENSE. Add one before publishing it or delivering it to anyone — see docs/setup/licensing.md"
+    record_phase "9. Licence" "warn"
+    return
+  fi
+
+  # Guard exactly the paths this phase writes, same contract as phase 10's
+  # guard and equally not bypassed by --yes. LICENSE must NOT be added to
+  # phase 10's list: writing it here would dirty the worktree and make
+  # de-template skip itself on every run.
+  local dirty_paths
+  dirty_paths="$(git status --porcelain -- LICENSE NOTICE 2>/dev/null || true)"
+  if [ -n "$dirty_paths" ]; then
+    warn "licence step skipped: LICENSE/NOTICE have uncommitted changes — commit or stash first"
+    printf '%s\n' "$dirty_paths" | sed 's/^/  /'
+    manual_urgent "Bootstrap did not touch LICENSE (uncommitted changes present). Confirm it names YOU, not the template author, before publishing or delivering this repository — docs/setup/licensing.md"
+    record_phase "9. Licence" "skip"
+    return
+  fi
+
+  # Fixed-string whole-line match avoids regex-escaping "(c)". A LICENSE that
+  # no longer carries the template's line was already decided by the adopter.
+  local template_line="Copyright (c) ${TEMPLATE_COPYRIGHT_YEAR} ${TEMPLATE_COPYRIGHT_HOLDER}"
+  if ! grep -qxF "$template_line" LICENSE; then
+    ok "LICENSE no longer carries the template's copyright line — leaving it alone"
+    record_phase "9. Licence" "skip"
+    return
+  fi
+
+  if [ -n "$LICENSE_MODE" ]; then
+    LICENSE_CHOICE="$LICENSE_MODE"
+    ok "licence choice from --license: ${LICENSE_CHOICE}"
+  elif [ "$ASSUME_YES" -eq 1 ]; then
+    LICENSE_CHOICE="defer"
+  else
+    license_explain
+    prompt_license_choice
+  fi
+
+  if [ "$LICENSE_CHOICE" = "defer" ]; then
+    skip "licence decision deferred — LICENSE still carries the template author's MIT"
+    manual_urgent "LICENSE still carries the TEMPLATE author's MIT copyright. Decide your licence BEFORE publishing this repository or delivering it to a client — MIT under your own name, proprietary/all-rights-reserved, or another licence — and record the scaffolding attribution in NOTICE. Both files are ready to copy in docs/setup/licensing.md"
+    record_phase "9. Licence" "warn"
+    return
+  fi
+
+  prompt_license_holder
+
+  local year rendered
+  year="$(date +%Y)"
+  case "$LICENSE_CHOICE" in
+    mit)         rendered="$LICENSE_MIT_SEED" ;;
+    proprietary) rendered="$LICENSE_PROPRIETARY_SEED" ;;
+    *)           fail "unreachable licence choice '${LICENSE_CHOICE}'"; record_phase "9. Licence" "fail"; return 1 ;;
+  esac
+  rendered="$(subst_all "$rendered" "__YEAR__" "$year")"
+  rendered="$(subst_all "$rendered" "__HOLDER__" "$LICENSE_HOLDER")"
+
+  # A plain redirect, not run_or_dry: that helper is the choke point for
+  # mutating `gh` calls, and the CHANGELOG/manifest writes in phase 10 branch
+  # on DRY_RUN inline the same way.
+  # NOTICE FIRST, deliberately. If the attribution cannot be written -- directory
+  # permissions, quota, I/O -- LICENSE must be left exactly as it was. Writing
+  # LICENSE first and failing here would leave the repository with neither the
+  # template's original notice nor the promised attribution, which is a worse
+  # state than not having run the phase at all.
+  write_notice || { record_phase "9. Licence" "fail"; return 1; }
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '%s[dry-run]%s would write LICENSE (%s, copyright %s %s)\n' \
+      "$C_YELLOW" "$C_RESET" "$LICENSE_CHOICE" "$year" "$LICENSE_HOLDER"
+  else
+    printf '%s\n' "$rendered" > LICENSE \
+      || { fail "writing LICENSE failed"; record_phase "9. Licence" "fail"; return 1; }
+  fi
+  ok "LICENSE written (${LICENSE_CHOICE}, copyright ${year} ${LICENSE_HOLDER})"
+
+  if [ "$LICENSE_CHOICE" = "proprietary" ]; then
+    manual "Have counsel review LICENSE — it is a template-generated example — then delete the 'Template-generated example' trailer at the bottom of the file"
+  fi
+  if [ "$KEEP_TEMPLATE_DOCS" -eq 1 ] && [ "$LICENSE_CHOICE" != "mit" ]; then
+    manual "README.md still shows the template's MIT badge and 'License: MIT' link (you kept it via --keep-template-docs) — update both to match your new LICENSE"
+  fi
+
+  record_phase "9. Licence" "ok"
+}
+
+# --- Phase 10 — De-template ---
 
 CHANGELOG_SEED='# Changelog
 
@@ -937,16 +1339,16 @@ No entries yet.
 
 phase_detemplate() {
   if [ "$KEEP_TEMPLATE_DOCS" -eq 1 ]; then
-    skip "Phase 9: de-template (--keep-template-docs)"
-    record_phase "9. De-template" "skip"
+    skip "Phase 10: de-template (--keep-template-docs)"
+    record_phase "10. De-template" "skip"
     return
   fi
 
-  doing "Phase 9: de-template"
+  doing "Phase 10: de-template"
 
   if [ ! -d "docs/template" ]; then
     ok "docs/template/ absent — repo is already de-templated, nothing to do"
-    record_phase "9. De-template" "skip"
+    record_phase "10. De-template" "skip"
     return
   fi
 
@@ -961,7 +1363,7 @@ phase_detemplate() {
   if [ -n "$dirty_paths" ]; then
     warn "de-template skipped: affected paths have uncommitted changes — commit or stash first"
     printf '%s\n' "$dirty_paths" | sed 's/^/  /'
-    record_phase "9. De-template" "skip"
+    record_phase "10. De-template" "skip"
     return
   fi
 
@@ -980,7 +1382,7 @@ EOF
 
   if [ "$do_detemplate" -eq 0 ]; then
     skip "de-templating"
-    record_phase "9. De-template" "skip"
+    record_phase "10. De-template" "skip"
     return
   fi
 
@@ -1002,12 +1404,12 @@ EOF
         ok "README.md replaced with ${readme_source}"
       else
         fail "mv reported success but README.md / ${readme_source} state is not as expected — refusing to remove docs/template/"
-        record_phase "9. De-template" "fail"
+        record_phase "10. De-template" "fail"
         return 1
       fi
     else
       fail "mv ${readme_source} README.md failed — refusing to remove docs/template/"
-      record_phase "9. De-template" "fail"
+      record_phase "10. De-template" "fail"
       return 1
     fi
   else
@@ -1017,19 +1419,19 @@ EOF
 
   if [ "$safe_to_remove_template" -ne 1 ]; then
     fail "de-template: mv step did not verify as safe — aborting before docs/template/ removal"
-    record_phase "9. De-template" "fail"
+    record_phase "10. De-template" "fail"
     return 1
   fi
 
   run_or_dry rm -rf docs/template \
-    || { fail "rm -rf docs/template failed"; record_phase "9. De-template" "fail"; return 1; }
+    || { fail "rm -rf docs/template failed"; record_phase "10. De-template" "fail"; return 1; }
   ok "docs/template/ removed"
 
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '%s[dry-run]%s would reset CHANGELOG.md to its 8-line seed\n' "$C_YELLOW" "$C_RESET"
   else
     printf '%s' "$CHANGELOG_SEED" > CHANGELOG.md \
-      || { fail "writing CHANGELOG.md failed"; record_phase "9. De-template" "fail"; return 1; }
+      || { fail "writing CHANGELOG.md failed"; record_phase "10. De-template" "fail"; return 1; }
   fi
   ok "CHANGELOG.md reset to seed"
 
@@ -1046,7 +1448,7 @@ EOF
       printf '%s[dry-run]%s would rewrite %s to {".": "0.0.0"}\n' "$C_YELLOW" "$C_RESET" "$manifest"
     else
       printf '{\n  ".": "0.0.0"\n}\n' > "$manifest" \
-        || { fail "writing ${manifest} failed"; record_phase "9. De-template" "fail"; return 1; }
+        || { fail "writing ${manifest} failed"; record_phase "10. De-template" "fail"; return 1; }
     fi
     ok "${manifest} rewritten to {\".\": \"0.0.0\"}"
   fi
@@ -1059,7 +1461,7 @@ follow normal Conventional Commit bumps.
 EOF
   manual "Remove the 'release-as: 0.1.0' key from release-please-config.json after your first release ships"
 
-  record_phase "9. De-template" "ok"
+  record_phase "10. De-template" "ok"
 }
 
 # --- Summary ---
@@ -1085,8 +1487,9 @@ print_summary() {
     esac
   done
 
-  if [ -n "$MANUAL_STEPS" ]; then
+  if [ -n "$MANUAL_URGENT" ] || [ -n "$MANUAL_STEPS" ]; then
     printf '\n%sRemaining MANUAL steps:%s\n' "$C_BOLD" "$C_RESET"
+    printf '%s' "$MANUAL_URGENT" | sed '/^$/d' | sed 's/^- /  [ ] ! /'
     printf '%s' "$MANUAL_STEPS" | sed '/^$/d' | sed 's/^- /  [ ] /'
   fi
 
@@ -1125,7 +1528,7 @@ run_phase() {
 main() {
   phase_preflight
 
-  # Phases 1-9: failures are collected, not fatal — preflight is the only
+  # Phases 1-10: failures are collected, not fatal — preflight is the only
   # phase whose failure aborts the whole run.
   run_phase phase_labels "1. Labels"
   run_phase phase_issue_types "2. Issue types"
@@ -1135,9 +1538,16 @@ main() {
   run_phase phase_security "6. Security"
   run_phase phase_actions_permission "7. Actions permission"
   run_phase phase_ruleset "8. Ruleset"
-  run_phase phase_detemplate "9. De-template"
+  run_phase phase_license "9. Licence"
+  run_phase phase_detemplate "10. De-template"
 
   print_summary
 }
 
-main "$@"
+# Guarded so the file can be sourced to get its functions without running them.
+# Nothing in `make verify` covers this script, so being able to exercise a
+# single phase in isolation is the only unit-test surface it has.
+# `bash scripts/bootstrap.sh` is unaffected.
+if bootstrap_is_main; then
+  main "$@"
+fi

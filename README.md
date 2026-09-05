@@ -40,4 +40,8 @@ The template is released and verified end to end (create from template → boots
 
 ## License
 
-[MIT](LICENSE)
+The template is [MIT](LICENSE). **Your repository does not have to be.**
+Bootstrap phase 9 makes you choose — MIT under your own name, a proprietary /
+all-rights-reserved notice for client and commissioned work, or decide later —
+and records the scaffolding's MIT attribution in `NOTICE`, which you keep
+either way. See [docs/setup/licensing.md](docs/setup/licensing.md).

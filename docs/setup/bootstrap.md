@@ -19,7 +19,8 @@ below), then re-run.
 | `--yes` | No prompts; accept defaults for every phase. |
 | `--prune` | Delete undeclared repo labels without prompting (the default answer is already yes; use this to skip the prompt in scripts/CI). |
 | `--skip-project` | Skip Project creation and field setup (phase 4). |
-| `--keep-template-docs` | Skip de-templating (phase 9); keep `docs/template/` and the starter README. |
+| `--license MODE` | Answer phase 9 non-interactively: `mit`, `proprietary` or `defer`. Without it, `--yes` defers and files the decision first. |
+| `--keep-template-docs` | Skip de-templating (phase 10); keep `docs/template/` and the starter README. |
 | `--help` | Show usage and exit. |
 
 ## Phases, and their manual equivalent
@@ -247,7 +248,53 @@ select `.github/rulesets/main-branch.json`. Review the imported rules (branch
 deletion/force-push blocked, PR required, `ci` status check required) and
 click **Create**.
 
-### 9. De-template
+### 9. Licence
+
+**The one phase you cannot safely skim.** Until you answer it, your repository
+carries the *template's* licence — MIT, copyright the template author — and
+that is almost certainly not what you want.
+
+MIT is an irrevocable grant: anyone who obtains a copy may use, modify,
+publish, distribute, sublicense and **sell** it, and publishing it once cannot
+be undone. For client or commissioned work that usually conflicts with your
+contract, which typically transfers copyright on final payment — an MIT file in
+the delivered repository grants the client, and everyone else, far more than
+that, before you have been paid. And even if you do want MIT, the copyright
+line has to name you.
+
+Three answers, with no default — a bare Enter re-asks:
+
+1. **MIT under your name.** Keeps the MIT terms, rewrites the copyright line.
+2. **Proprietary / all rights reserved.** For client, commissioned and
+   closed-source work. Replaces `LICENSE` with an all-rights-reserved notice
+   that defers to your commission agreement rather than pretending to be one.
+3. **Decide later.** Leaves `LICENSE` untouched and puts the decision at the
+   **top** of the remaining manual steps, marked `!`.
+
+Anything else — Apache-2.0, GPL, BUSL — is answer 3: supply the text yourself.
+The script ships no other licence bodies.
+
+**Both writing answers also create `NOTICE`, and this is not optional.**
+Substantial parts of this template ship verbatim in your repository
+(`scripts/bootstrap.sh` alone is over 900 lines, plus the workflows, the
+Makefile, and every skill), and MIT requires its copyright and permission
+notice to travel with them. Rewriting `LICENSE` without writing `NOTICE` would
+delete the only copy of that notice from your repository — swapping a licensing
+mistake for a licence violation. `NOTICE` is where the attribution lives, and
+it stays even if you relicense everything else.
+
+Under `--yes` the phase writes **nothing** and files the decision as the first
+manual step, because silently keeping the template author's MIT is the bug this
+phase exists to prevent. `--license mit|proprietary|defer` answers it
+non-interactively. Re-running after you have decided is a no-op: the phase
+recognises that `LICENSE` no longer carries the template's copyright line and
+leaves it alone. If `LICENSE` or `NOTICE` have uncommitted changes the phase
+skips entirely, even under `--yes`.
+
+Manual: see `docs/setup/licensing.md`, which carries both file bodies verbatim
+and the reasoning behind them.
+
+### 10. De-template
 
 One-time conversion from the template product to your project:
 

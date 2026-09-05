@@ -43,6 +43,7 @@ lint-secrets: ## Scan for committed secrets
 check: ## Run repo self-consistency scripts (skips scripts not yet added)
 	@if [ -x scripts/check-skills.sh ]; then scripts/check-skills.sh; else echo "skip: scripts/check-skills.sh not present yet"; fi
 	@if [ -x scripts/check-local-md.sh ]; then scripts/check-local-md.sh; else echo "skip: scripts/check-local-md.sh not present yet"; fi
+	@if [ -x scripts/check-license-marker.sh ]; then scripts/check-license-marker.sh; else echo "skip: scripts/check-license-marker.sh not present yet"; fi
 
 lint: lint-docs lint-actions lint-secrets check ## L0 - aggregate all lint/consistency checks
 
