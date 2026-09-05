@@ -388,8 +388,8 @@ rule lists via `gh api`). To pick up changes from
 **Settings → Rules → Rulesets**, then re-run `scripts/bootstrap.sh`.
 
 **"GitHub Actions is not permitted to create or approve pull requests"** in
-the release-please workflow run — phase 6 was skipped or declined. Enable it
-per the manual step above, or re-run the script and accept the phase 6
+the release-please workflow run — phase 7 was skipped or declined. Enable it
+per the manual step above, or re-run the script and accept the phase 7
 prompt.
 
 ## See also
