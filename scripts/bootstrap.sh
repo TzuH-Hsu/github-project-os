@@ -786,7 +786,17 @@ phase_security() {
   ok "repository visibility: ${visibility}"
 
   if [ "$visibility" = "public" ]; then
-    if [ "$secret_scanning" = "enabled" ] && [ "$push_protection" = "enabled" ]; then
+    if [ "$secret_scanning" = "unknown" ] || [ "$push_protection" = "unknown" ]; then
+      # security_and_analysis is only populated for callers with admin on the
+      # repo. "unknown" therefore means COULD NOT READ, never "disabled" --
+      # prompting here (or PATCHing under --yes) would act on a guess, and the
+      # phase would report a state it never actually observed.
+      warn "cannot read secret scanning state (secret scanning: ${secret_scanning}, push protection: ${push_protection})"
+      warn "  security_and_analysis is only visible to callers with admin on ${REPO}"
+      warn "  this is 'not readable', not 'disabled' — bootstrap will not guess"
+      manual "Check Settings → Advanced Security → Secret scanning and Push protection by hand; bootstrap could not read their current state"
+      result="warn"
+    elif [ "$secret_scanning" = "enabled" ] && [ "$push_protection" = "enabled" ]; then
       ok "secret scanning + push protection: already enabled"
     else
       cat <<'EOF'
