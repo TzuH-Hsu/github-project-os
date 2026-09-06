@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.2.0...v0.3.0) (2026-09-06)
+
+
+### Features
+
+* bootstrap phase 6 reports and offers repository security settings ([#27](https://github.com/TzuH-Hsu/github-project-os/issues/27)) ([8a62e5c](https://github.com/TzuH-Hsu/github-project-os/commit/8a62e5c0595133ed478276b2beb35c5268aa9922))
+* bootstrap phase 9 requires an explicit licence choice ([#29](https://github.com/TzuH-Hsu/github-project-os/issues/29)) ([9465360](https://github.com/TzuH-Hsu/github-project-os/commit/9465360ec5b5a9d2359f33392311750558aed7c9))
+* retire the agent-ok and by-agent label mechanism ([#37](https://github.com/TzuH-Hsu/github-project-os/issues/37)) ([bd8258d](https://github.com/TzuH-Hsu/github-project-os/commit/bd8258db4eb28f04516b0fbd7fa742fdccb9fbe8)), closes [#36](https://github.com/TzuH-Hsu/github-project-os/issues/36)
+* runner selection moves to the RUNNER_LABELS repository variable ([#32](https://github.com/TzuH-Hsu/github-project-os/issues/32)) ([02542da](https://github.com/TzuH-Hsu/github-project-os/commit/02542da1ee049c805e3acdc949de9887393aa7aa))
+* ship the coarse-Type fallback labels as a commented-out opt-in ([#34](https://github.com/TzuH-Hsu/github-project-os/issues/34)) ([4d06dc1](https://github.com/TzuH-Hsu/github-project-os/commit/4d06dc1dbdeda07b644ed49659da6561c7cbab85))
+
+
+### Bug Fixes
+
+* bootstrap phase 5 sets four repository settings left at GitHub defaults ([#25](https://github.com/TzuH-Hsu/github-project-os/issues/25)) ([91bb54a](https://github.com/TzuH-Hsu/github-project-os/commit/91bb54a66ce86c1dd9796a899f18e0db2bca4c12)), closes [#24](https://github.com/TzuH-Hsu/github-project-os/issues/24)
+* stop the issue labeler stripping hand-added type:* labels ([#20](https://github.com/TzuH-Hsu/github-project-os/issues/20)) ([61b4cc3](https://github.com/TzuH-Hsu/github-project-os/commit/61b4cc3eb45c2038c275177a6ede7121389365f1))
+
 ## [0.2.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.1.0...v0.2.0) (2026-07-04)
 
 
