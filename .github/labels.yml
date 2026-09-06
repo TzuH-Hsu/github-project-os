@@ -86,14 +86,6 @@ labels:
     color: c5def5
     description: Nice to have / polish
 
-  - name: agent-ok
-    color: 7057ff
-    description: AI agents may pick this up self-service when status is Ready
-
-  - name: by-agent
-    color: bfd4f2
-    description: Authored by an AI agent (audit trail)
-
   - name: area:docs
     color: 1d76db
     description: Documentation and guides
