@@ -12,7 +12,7 @@ This is **not** a language or framework starter. It is the layer underneath: con
 ## What you get
 
 - **Governance as code** — declarative labels, issue forms that set native issue types, a metadata single-home contract (`.github/PROJECT_FIELDS.md`), branch ruleset, PR template with a validation ladder.
-- **AI collaboration layer** — a canonical `AGENTS.md` hub (Claude, Gemini, Copilot and others all point to it), an agent work queue convention (`agent-ok`), and session-handoff rules that keep context from rotting.
+- **AI collaboration layer** — a canonical `AGENTS.md` hub (Claude, Gemini, Copilot and others all point to it), explicit agent capability boundaries and honest-reporting rules, and session-handoff rules that keep context from rotting.
 - **Skills** — focused, vendor-neutral knowledge modules under `skills/` that both humans and agents load on demand: issue writing, PR standards, release management, ADRs, anti-patterns, and more.
 - **Automation without sprawl** — a small set of workflows (CI, issue labeling, link maintenance, release PRs) that call `make` targets, so you customize the Makefile and never touch the workflows.
 - **A bootstrap script** — `scripts/bootstrap.sh` applies everything a template can't ship as files: labels, milestone, GitHub Project fields, repo settings, branch ruleset.

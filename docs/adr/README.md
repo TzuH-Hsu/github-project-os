@@ -28,3 +28,4 @@ Routine choices (a library patch bump, a wording tweak) do not get ADRs. When in
 | [ADR-0004](ADR-0004-adopter-licence-choice.md) | The adopter's licence is an explicit bootstrap decision | Accepted |
 | [ADR-0005](ADR-0005-runner-selection-variable.md) | Runner selection is an adopter variable, not a workflow edit | Accepted |
 | [ADR-0006](ADR-0006-coarse-type-fallback.md) | Coarse Type on accounts without native issue types | Accepted |
+| [ADR-0007](ADR-0007-retire-agent-labels.md) | Retire the `agent-ok` / `by-agent` label mechanism | Accepted |
