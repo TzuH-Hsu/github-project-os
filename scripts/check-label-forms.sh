@@ -290,8 +290,11 @@ else
     lab_areas="$(labeler_list "$LABELER_FILE" ALLOWED_AREAS | with_prefix '')"
     compare "labeler ALLOWED_AREAS matches the area:* set in $LABELS_FILE" "$areas" "$lab_areas" \
       "fix: edit the ALLOWED_AREAS constant in $LABELER_FILE — or take the labeler that reads labels.yml at run time (github-project-os #45)"
+  elif grep -qF "path: '.github/labels.yml'" "$LABELER_FILE" && grep -qE 'ALLOWED_AREAS = await ' "$LABELER_FILE"; then
+    ok "labeler reads area:* from $LABELS_FILE at run time (no ALLOWED_AREAS constant to drift)"
   else
-    ok "labeler declares no ALLOWED_AREAS constant (reads area:* from $LABELS_FILE at run time)"
+    fail "labeler neither declares ALLOWED_AREAS nor loads it from .github/labels.yml — every Area selection would be ignored, or the script would throw"
+    echo "      fix: take the labeler from github-project-os #45, or restore the ALLOWED_AREAS constant"
   fi
 
   # --- i: older labelers duplicate the allowlists as regexes
