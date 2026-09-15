@@ -180,10 +180,17 @@ form_heading() {
   ' "$1"
 }
 
-# Items of a `const NAME = ['a', 'b'];` line in the labeler, one per line.
+# Items of the `const NAME = [ ... ];` array in the labeler, one per line —
+# collected from the opening bracket to the first closing bracket, so a
+# formatter wrapping the array across lines changes nothing.
 labeler_list() {
-  grep -E "const $2 = \[" "$1" \
-    | sed -E "s/.*\[([^]]*)\].*/\1/" \
+  awk -v name="$2" '
+    index($0, "const " name " = [") { collecting = 1; sub(/.*\[/, "") }
+    collecting {
+      if (index($0, "]")) { sub(/\].*/, ""); print; exit }
+      print
+    }
+  ' "$1" \
     | tr ',' '\n' \
     | sed -E "s/[[:space:]'\"]//g" \
     | grep -v '^$' || true
