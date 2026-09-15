@@ -146,18 +146,27 @@ jobs:
 
             const desired = new Set();
 
+            // Dropdown option text is "<value> — <description>": the value is
+            // the token before the first whitespace, and the allowlist alone
+            // decides whether it counts. No second regex spelling out the
+            // same values — that is a list that drifts (#46 checks the rest).
+            function leadingToken(line) {
+              const match = line.match(/^(\S+)/);
+              return match ? match[1] : null;
+            }
+
             // ### Priority -> priority:pX (dropdown, e.g. "p0 — Critical, drop everything")
             const priorityLine = dropdownPrefix('Priority');
             if (priorityLine) {
-              const match = priorityLine.match(/^(p[0-3])\b/);
-              if (match && ALLOWED_PRIORITIES.includes(match[1])) desired.add(`priority:${match[1]}`);
+              const value = leadingToken(priorityLine);
+              if (value && ALLOWED_PRIORITIES.includes(value)) desired.add(`priority:${value}`);
             }
 
             // ### Subtype -> type:X (task form only; dropdown, e.g. "chore — Maintenance")
             const subtypeLine = dropdownPrefix('Subtype');
             if (subtypeLine) {
-              const match = subtypeLine.match(/^(chore|ops|docs|security)\b/);
-              if (match && ALLOWED_SUBTYPES.includes(match[1])) desired.add(`type:${match[1]}`);
+              const value = leadingToken(subtypeLine);
+              if (value && ALLOWED_SUBTYPES.includes(value)) desired.add(`type:${value}`);
             }
 
             // ### Area -> area:* (checkboxes, e.g. "- [x] area:docs — Documentation and guides")
