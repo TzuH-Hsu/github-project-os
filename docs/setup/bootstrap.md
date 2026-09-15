@@ -92,11 +92,9 @@ noise under this taxonomy, so pruning is the default answer).
 Manual: **Settings → Labels**. Create each label from `.github/labels.yml`
 by hand (name, color, description), then delete anything not on that list.
 
-The `area:*` family is the one you are expected to rename. Do it in
-`.github/labels.yml` and in the Area options of each issue form under
-`.github/ISSUE_TEMPLATE/`; `make check` fails until they agree and prints the
-names it expects. Nothing else needs editing — the issue labeler reads
-`labels.yml` at run time.
+The `area:*` family is the one you are expected to rename; the phase files a
+manual step while the starter set is still declared. The procedure (two
+files, one check) is `skills/labels-and-taxonomy` rule 6.
 
 ### 2. Issue types
 

@@ -3,10 +3,8 @@
 # This file is the single source of truth for all repository labels.
 # Sync by re-running scripts/bootstrap.sh with the gh CLI.
 #
-# area:* labels are starter examples — adopters should rename to their own domains.
-# When you do, update the Area options in the three issue forms under
-# .github/ISSUE_TEMPLATE/ to match; `make check` fails until they agree. The
-# labeler workflow needs no edit — it reads this file at run time.
+# area:* labels are starter examples — adopters should rename to their own domains
+# (the forms' Area options must follow; see skills/labels-and-taxonomy rule 6).
 #
 # Format (parsed by scripts/bootstrap.sh's awk-based parser — no yq
 # dependency): flat, unquoted, single-line `- name:` / `color:` /

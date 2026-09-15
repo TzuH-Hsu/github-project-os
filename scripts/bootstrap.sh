@@ -327,6 +327,14 @@ phase_labels() {
 $parsed
 EOF
 
+  # The starter area:* set is meant to be renamed. Say so here — phase 1
+  # always runs, unlike phase 10, which returns early under
+  # --keep-template-docs, a declined confirm, a dirty worktree or an absent
+  # docs/template/. The reminder stops once the declared set differs.
+  if [ "$(printf '%s\n' "$parsed" | cut -f1 | grep '^area:' | sort | tr '\n' ' ')" = "area:ci area:docs area:governance area:skills " ]; then
+    manual "Rename the starter area:* labels to your domains — in .github/labels.yml AND the Area options of each issue form under .github/ISSUE_TEMPLATE/ (make check fails until they agree); then re-run bootstrap to sync the labels"
+  fi
+
   # Find repo labels not declared in labels.yml (prune candidates).
   #
   # Tool-managed labels: exclude anything matching `autorelease:*` from
@@ -1535,8 +1543,6 @@ EOF
     warn "${rp_config} has no initial-version — release-please will number the first release 1.0.0"
     manual "Add '\"initial-version\": \"0.1.0\"' to release-please-config.json so the first release matches the v0.1.0 milestone"
   fi
-
-  manual "Rename the starter area:* labels to your domains — in .github/labels.yml AND the Area options of each issue form under .github/ISSUE_TEMPLATE/ (make check fails until they agree); then re-run bootstrap to sync the labels"
 
   record_phase "10. De-template" "ok"
 }
