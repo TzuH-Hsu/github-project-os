@@ -146,29 +146,36 @@ jobs:
 
             const desired = new Set();
 
-            // Option text is "<value> — <description>": the value is everything
-            // before the first dash (—, – or -) with whitespace on both sides,
-            // trimmed — so a name may contain spaces, as GitHub labels can. The
-            // allowlist alone decides whether it counts; no second regex
-            // spelling out the same values (scripts/check-label-forms.sh keeps
-            // the forms and labels.yml on this convention).
-            function optionValue(text) {
-              const value = text.split(/\s+[—–-]\s+/, 1)[0].trim();
-              return value || null;
+            // Option text is "<value> — <description>". Rather than guessing
+            // where the value ends, match the text against the allowed values:
+            // the longest allowed value the text starts with, followed by the
+            // end of the text or a dash (—, – or -) with whitespace on both
+            // sides. A value may therefore contain spaces or a spaced dash, as
+            // GitHub label names can; the allowlist alone decides, and there
+            // is no second regex spelling out the same values
+            // (scripts/check-label-forms.sh keeps the forms and labels.yml on
+            // this convention).
+            function matchAllowed(text, allowed) {
+              const candidates = [...allowed].sort((a, b) => b.length - a.length);
+              for (const name of candidates) {
+                if (text === name) return name;
+                if (text.startsWith(name) && /^\s+[—–-]\s+/.test(text.slice(name.length))) return name;
+              }
+              return null;
             }
 
             // ### Priority -> priority:pX (dropdown, e.g. "p0 — Critical, drop everything")
             const priorityLine = dropdownPrefix('Priority');
             if (priorityLine) {
-              const value = optionValue(priorityLine);
-              if (value && ALLOWED_PRIORITIES.includes(value)) desired.add(`priority:${value}`);
+              const value = matchAllowed(priorityLine, ALLOWED_PRIORITIES);
+              if (value) desired.add(`priority:${value}`);
             }
 
             // ### Subtype -> type:X (task form only; dropdown, e.g. "chore — Maintenance")
             const subtypeLine = dropdownPrefix('Subtype');
             if (subtypeLine) {
-              const value = optionValue(subtypeLine);
-              if (value && ALLOWED_SUBTYPES.includes(value)) desired.add(`type:${value}`);
+              const value = matchAllowed(subtypeLine, ALLOWED_SUBTYPES);
+              if (value) desired.add(`type:${value}`);
             }
 
             // ### Area -> area:* (checkboxes, e.g. "- [x] area:docs — Documentation and guides")
@@ -177,10 +184,9 @@ jobs:
               const checkedLines = areaText.split(/\r?\n/).filter((line) => /^-\s*\[[xX]\]/.test(line));
               for (const line of checkedLines) {
                 // "- [x] area:<name> — <description>": same rule as the
-                // dropdowns, so the name may contain spaces or punctuation;
-                // the allowlist decides, not a character class.
-                const value = optionValue(line.replace(/^-\s*\[[xX]\]\s*/, ''));
-                if (value && ALLOWED_AREAS.includes(value)) desired.add(value);
+                // dropdowns; the allowlist decides, not a character class.
+                const value = matchAllowed(line.replace(/^-\s*\[[xX]\]\s*/, '').trim(), ALLOWED_AREAS);
+                if (value) desired.add(value);
               }
             }
 
