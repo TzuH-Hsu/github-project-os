@@ -22,12 +22,19 @@
 #   f. no `- name:` entry in labels.yml is quoted — the header forbids it,
 #      and bootstrap would create a label with the quotes in its name.
 #
-# Option text convention: the label name is the token before the first
-# whitespace, e.g. `- label: "area:docs — Documentation and guides"` or
-# `- "p0 — Critical, drop everything"`. Only the names are compared; the
-# descriptive text is free. Names therefore cannot contain whitespace (the
-# labeler reads the checked token the same way); any other character is fine
-# with a labeler that reads labels.yml at run time — see h. for older ones.
+# Option text convention: `<name> — <description>` — the name is everything
+# before the first dash (—, – or -) that has whitespace on both sides,
+# trimmed; with no such separator the whole option is the name. E.g.
+# `- label: "area:docs — Documentation and guides"` names area:docs and
+# `- "p0 — Critical, drop everything"` names p0. Only the names are compared;
+# the description is free. The labeler reads the same option text from the
+# issue body with the same rule, so a name may contain spaces or punctuation
+# (see h. for older labelers), but not a spaced dash.
+#
+#   j. each form field the labeler reads must keep the heading it reads —
+#      `label: Priority`, `label: Subtype`, `label: Area` — because the issue
+#      body carries headings, not field ids; renaming one blinds the labeler
+#      while the ids and options still match.
 #
 # The labeler's area:* handling depends on its version, and this script may
 # run in an adopted repo carrying an older copy, so it looks at the file:
@@ -92,7 +99,7 @@ label_names() {
 # Option names of the form field whose `id:` is $2, in form $1. The field
 # block starts at its `id:` line and ends at the next `- type:` field. Inside
 # it, option lines are `- label: "..."` (checkboxes) or `- "..."` (dropdown);
-# the name is the first whitespace-delimited token inside the quotes.
+# the name is the quoted text up to the first spaced dash, trimmed.
 form_options() {
   awk -v want="$2" '
     /^[[:space:]]*-[[:space:]]*type:/ { inblock = 0 }
@@ -106,9 +113,33 @@ form_options() {
     inblock && /^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?["'"'"']/ {
       opt = $0
       sub(/^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?["'"'"']/, "", opt)
-      sub(/[[:space:]].*$/, "", opt)
-      sub(/["'"'"']$/, "", opt)
+      sub(/["'"'"'][[:space:]]*$/, "", opt)
+      sub(/[[:space:]]+(—|–|-)[[:space:]]+.*$/, "", opt)
+      sub(/[[:space:]]+$/, "", opt)
       print opt
+    }
+  ' "$1"
+}
+
+# The `label:` attribute (the heading the issue body will carry) of the form
+# field whose `id:` is $2, in form $1.
+form_heading() {
+  awk -v want="$2" '
+    /^[[:space:]]*-[[:space:]]*type:/ { inblock = 0 }
+    /^[[:space:]]*id:[[:space:]]*/ {
+      id = $0
+      sub(/^[[:space:]]*id:[[:space:]]*/, "", id)
+      sub(/[[:space:]]+$/, "", id)
+      inblock = (id == want)
+      next
+    }
+    inblock && /^[[:space:]]*label:[[:space:]]*/ {
+      h = $0
+      sub(/^[[:space:]]*label:[[:space:]]*/, "", h)
+      gsub(/["'"'"']/, "", h)
+      sub(/[[:space:]]+$/, "", h)
+      print h
+      exit
     }
   ' "$1"
 }
@@ -132,8 +163,8 @@ compare() {
     ok "$what"
   else
     fail "$what"
-    echo "      expected: $(printf '%s\n' "$expected" | tr '\n' ' ')"
-    echo "      found:    $(printf '%s\n' "$found" | tr '\n' ' ')"
+    echo "      expected: $(printf '%s\n' "$expected" | sed "s/.*/'&'/" | tr '\n' ' ')"
+    echo "      found:    $(printf '%s\n' "$found" | sed "s/.*/'&'/" | tr '\n' ' ')"
     [ -n "$hint" ] && echo "      $hint"
   fi
 }
@@ -171,6 +202,17 @@ for form in $FORMS; do
   found_prio="$(form_options "$path" priority | with_prefix 'priority:')"
   compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
     "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
+  # --- j: the headings the labeler reads
+  for pair in "area:Area" "priority:Priority" "subtype:Subtype"; do
+    fid="${pair%%:*}"; want="${pair#*:}"
+    [ "$fid" = subtype ] && [ "$form" != task.yml ] && continue
+    got="$(form_heading "$path" "$fid")"
+    if [ "$got" = "$want" ]; then
+      ok "$form field '$fid' keeps the heading the labeler reads: $want"
+    else
+      fail "$form field '$fid' has label '${got:-<missing>}' — the labeler reads the '### $want' heading from the issue body, so this field must keep label: $want"
+    fi
+  done
 done
 
 # --- c/d: labeler constants
