@@ -172,8 +172,9 @@ form_heading() {
     inblock && /^[[:space:]]*label:[[:space:]]*/ {
       h = $0
       sub(/^[[:space:]]*label:[[:space:]]*/, "", h)
-      gsub(/["'"'"']/, "", h)
       sub(/[[:space:]]+$/, "", h)
+      # strip one pair of matching outer quotes only; inner ones are content
+      if (h ~ /^".*"$/ || h ~ /^'"'"'.*'"'"'$/) { h = substr(h, 2, length(h) - 2) }
       print h
       exit
     }
