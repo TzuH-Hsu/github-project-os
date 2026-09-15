@@ -13,17 +13,17 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `skills/` (15 modules) | On-demand knowledge for humans + agents | Content reviews; consistency enforced by `scripts/check-skills.sh` |
 | `.github/PROJECT_FIELDS.md` | Metadata single-home authority map | Update only when taxonomy changes (rare, ADR-worthy) |
 | `.github/labels.yml` | Labels as code; bootstrap re-run = sync; carries the commented-out coarse-Type fallback (ADR-0006) | Edit alongside label changes; `FORM_MANAGED_TYPES` in `issue-labeler.yml` must match, and the commented block must stay commented |
-| `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Sync option lists with `labels.yml` |
+| `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Area/Priority/Subtype options must match `labels.yml` — `scripts/check-label-forms.sh` fails `make check` until they do |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Validation ladder + RISK convention at point of use | Near zero |
 | `.github/workflows/ci.yml` | L0 gate; installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` or `runs-on:` | SHA-pin bumps via Dependabot |
-| `.github/workflows/issue-labeler.yml` | Form selections → labels (single-home preserving) | Allowlist sync with `labels.yml` |
+| `.github/workflows/issue-labeler.yml` | Form selections → labels (single-home preserving) | Allowlist sync with `labels.yml` — `ALLOWED_PRIORITIES` / `ALLOWED_SUBTYPES` checked by `scripts/check-label-forms.sh` |
 | `.github/workflows/maintenance.yml` | Weekly drift detectors: external link check + CI tool version check | Near zero |
 | `.github/workflows/release-please.yml` + configs | Human-gated release automation (ADR-0002) | Action SHA bumps; `initial-version` pins adopters' first release and is inert afterwards |
 | `.github/rulesets/main-branch.json` | Importable branch protection (PR + green `ci` required) | Near zero |
 | `LICENSE` | The template's own licence (MIT); bootstrap phase 9 replaces it with the adopter's choice and moves upstream attribution to `NOTICE` | Near zero — the holder line is asserted against `bootstrap.sh`'s constants by `scripts/check-license-marker.sh` |
 | `Makefile` | The only executable contract; adopter customization point | Grows with adopter stack, not with the template |
 | `scripts/bootstrap.sh` | Applies everything a template can't ship as files; idempotent sync | Highest-cost component — E2E-verified each release (below) |
-| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker | Near zero |
+| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker, label values repeated in forms and the labeler | Near zero |
 | `scripts/install-ci-tools.sh` | Checksum-verified CI tool installs; single home for all five tool version pins, shared by `ci.yml` and `maintenance.yml` via `make ci-tools`; bounds `RUNNER_LABELS` to linux x86_64 | Hand-bump a pin when the drift check flags it |
 | `scripts/check-tool-versions.sh` | Diffs those pins against upstream weekly and fails on drift — Dependabot cannot see them, so nothing else would | Near zero; add a row when a tool is added |
 | `docs/adr/` | Decision records; the "why" layer | Grows slowly by trigger criteria |
