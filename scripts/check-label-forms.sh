@@ -104,8 +104,8 @@ label_names() {
 
 # Option texts of the form field whose `id:` is $2, in form $1, one per line,
 # quotes stripped. The field block starts at its `id:` line and ends at the
-# next `- type:` field. Inside it, option lines are `- label: "..."`
-# (checkboxes) or `- "..."` (dropdown).
+# next `- type:` field. Inside it, option lines are `- label: <text>`
+# (checkboxes) or `- <text>` (dropdown), quoted or plain.
 form_option_texts() {
   awk -v want="$2" '
     /^[[:space:]]*-[[:space:]]*type:/ { inblock = 0 }
@@ -116,12 +116,13 @@ form_option_texts() {
       inblock = (id == want)
       next
     }
-    inblock && /^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?["'"'"']/ {
+    inblock && /^[[:space:]]*-[[:space:]]*/ {
       opt = $0
-      sub(/^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?["'"'"']/, "", opt)
-      sub(/["'"'"'][[:space:]]*$/, "", opt)
+      sub(/^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?/, "", opt)
       sub(/[[:space:]]+$/, "", opt)
-      print opt
+      # quoted or plain scalar: strip one pair of matching outer quotes only
+      if (opt ~ /^".*"$/ || opt ~ /^'"'"'.*'"'"'$/) { opt = substr(opt, 2, length(opt) - 2) }
+      if (opt != "") print opt
     }
   ' "$1"
 }
