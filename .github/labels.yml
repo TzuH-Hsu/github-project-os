@@ -37,13 +37,11 @@ labels:
     description: Security subtype (native type stays Task)
 
   # --- Coarse Type fallback (personal accounts only) -------------------------
-  # Uncomment ONLY if `gh api repos/{owner}/{repo}/issue-types` 404s or is empty
-  # for this repo. When it does, the coarse Type (Bug/Feature/Task) has no native
-  # home and the issue forms' top-level `type:` key is silently ignored.
-  #
-  # Native issue types began as an organization-only feature and have since been
-  # rolled out to personal accounts too, so check the endpoint rather than
-  # assuming from your account type -- bootstrap phase 2 checks it for you.
+  # Uncomment ONLY when bootstrap phase 2 reports that native issue types cannot
+  # be applied on this repo. That is every personal-account repo: the REST
+  # endpoint lists Bug/Feature/Task there, but no issue can carry one, so the
+  # coarse Type has no native home and the forms' top-level `type:` key is
+  # silently ignored. Phase 2 probes GraphQL, which is null in exactly that case.
   #
   # Uncomment the two entries below ONLY on a personal-account repo where you
   # want a queryable coarse Type. Labels then become the *one* home for it — see

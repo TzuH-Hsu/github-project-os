@@ -11,6 +11,12 @@ The metadata contract (ADR-0003) gives coarse Type — Bug, Feature, Task — ex
 
 The obvious fix, shipping the two labels active, is worse than it looks. An organization repo has native issue types; an active `type:bug` label would give coarse Type two homes, the exact dual-write ADR-0003 forbids. And an org adopter cannot undo it by deleting the label on GitHub, because the next `scripts/bootstrap.sh` sync recreates anything `labels.yml` still declares. The only durable fix is editing `labels.yml` — so the adopter edits that file either way.
 
+## Amendment (2026-09-15, issue #42)
+
+The Context above is wrong about the discriminator, and it was wrong for a verifiable reason: the "verified on this repository" check read the REST listing, and the REST listing lies. `repos/{owner}/{repo}/issue-types` returns `Bug`/`Feature`/`Task` with `is_enabled: true` on a personal-account repository, yet no issue there can carry a type — an issue opened through the Bug report web form reads back `type: null`, and the REST and GraphQL mutations that set a type succeed and store `null`. GraphQL `repository.issueTypes` is `null` on the same repository and lists the types on organization repositories, so **its nullability is the condition to test**. In practice that means native issue types are still an organization feature; a personal-account adopter is always in the fallback case.
+
+Nothing in the Decision changes. Bootstrap phase 2 now probes GraphQL and names the listed-but-inapplicable state explicitly; the four places that repeated "rolled out to personal accounts, check the endpoint" were corrected in the same change.
+
 ## Decision
 
 The two labels ship **commented out** in `.github/labels.yml`, with the reasoning inline, and bootstrap phase 2 enforces the contract in both directions.
