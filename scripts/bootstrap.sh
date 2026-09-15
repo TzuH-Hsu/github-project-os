@@ -1536,6 +1536,8 @@ EOF
     manual "Add '\"initial-version\": \"0.1.0\"' to release-please-config.json so the first release matches the v0.1.0 milestone"
   fi
 
+  manual "Rename the starter area:* labels to your domains — in .github/labels.yml AND the Area options of each issue form under .github/ISSUE_TEMPLATE/ (make check fails until they agree); then re-run bootstrap to sync the labels"
+
   record_phase "10. De-template" "ok"
 }
 

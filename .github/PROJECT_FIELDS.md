@@ -9,7 +9,7 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 | Type (coarse) | **Native issue type** | `Bug` / `Feature` / `Task` — set by the issue form (no organization? see "Personal accounts") |
 | Type (subtype) | `type:*` **labels** | `chore` / `ops` / `docs` / `security` — Task subtypes only |
 | Priority | `priority:*` **labels** | `p0` critical / `p1` milestone-blocking / `p2` important / `p3` polish |
-| Area | `area:*` **labels** | starter set: `docs`, `skills`, `ci`, `governance` — rename to your domains |
+| Area | `area:*` **labels** | starter set: `docs`, `skills`, `ci`, `governance` — rename to your domains in `labels.yml` **and** the issue forms' Area options (`make check` enforces) |
 | Workflow status | **Project `Status` field** | `Backlog` / `Ready` / `In Progress` / `In Review` / `Blocked` / `Done` |
 | Target version | **Milestone** | `vX.Y.Z` releases, `gov-*` process phases; **no milestone = backlog** |
 | Effort | **Project `Effort` field** | `S` (≤ half a day) / `M` (≤ 2 days) / `L` (must be decomposed first) |
