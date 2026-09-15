@@ -92,6 +92,10 @@ noise under this taxonomy, so pruning is the default answer).
 Manual: **Settings → Labels**. Create each label from `.github/labels.yml`
 by hand (name, color, description), then delete anything not on that list.
 
+The `area:*` family is the one you are expected to rename; the phase files a
+manual step while the starter set is still declared. The procedure (two
+files, one check) is `skills/labels-and-taxonomy` rule 6.
+
 ### 2. Issue types
 
 Checks whether native issue types (`Bug`/`Feature`/`Task`) can actually be
