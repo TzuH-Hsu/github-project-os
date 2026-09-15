@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.3.1...v0.4.0) (2026-09-15)
+
+
+### Features
+
+* make check fails when the issue forms or the labeler disagree with labels.yml ([#50](https://github.com/TzuH-Hsu/github-project-os/issues/50)) ([22cc535](https://github.com/TzuH-Hsu/github-project-os/commit/22cc53521264e5371e5e94fc4956a1196804c58e))
+
+
+### Bug Fixes
+
+* issue labeler reads the area:* allowlist from labels.yml instead of a hardcoded list ([#48](https://github.com/TzuH-Hsu/github-project-os/issues/48)) ([3371cd1](https://github.com/TzuH-Hsu/github-project-os/commit/3371cd11ac375df7992f10ed0db29126faa62ee3))
+
 ## [0.3.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.3.0...v0.3.1) (2026-09-15)
 
 
