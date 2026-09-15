@@ -32,10 +32,11 @@
 # dash (see h. for what older labelers can and cannot read). An option that
 # resolves to no declared name is reported as `?<option text>`.
 #
-#   j. each form field the labeler reads must keep the heading it reads —
-#      `label: Priority`, `label: Subtype`, `label: Area` — because the issue
-#      body carries headings, not field ids; renaming one blinds the labeler
-#      while the ids and options still match.
+#   j. while the labeler workflow exists, each form field it reads must keep
+#      the heading it reads — `label: Priority`, `label: Subtype`,
+#      `label: Area` — because the issue body carries headings, not field
+#      ids; renaming one blinds the labeler while ids and options still match.
+#      An adopter who removed the labeler is free to rename headings.
 #
 # The labeler's area:* handling depends on its version, and this script may
 # run in an adopted repo carrying an older copy, so it looks at the file:
@@ -231,7 +232,8 @@ for form in $FORMS; do
   found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" | with_prefix 'priority:')"
   compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
     "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
-  # --- j: the headings the labeler reads
+  # --- j: the headings the labeler reads (only while there is a labeler)
+  [ -f "$LABELER_FILE" ] || continue
   for pair in "area:Area" "priority:Priority" "subtype:Subtype"; do
     fid="${pair%%:*}"; want="${pair#*:}"
     [ "$fid" = subtype ] && [ "$form" != task.yml ] && continue
