@@ -8,6 +8,11 @@ name: Issue labeler
 # "the four type:* subtype labels", not "type:*": the type: namespace also
 # carries labels no form produces, so this workflow owns an exact list rather
 # than a prefix. See FORM_MANAGED_TYPES below.
+#
+# area:* is the family adopters are told to rename, so its allowlist is not
+# written here: it is read from .github/labels.yml on the default branch at
+# run time (see loadAllowedAreas below). This file carries no adopter values
+# and can be replaced whole on upgrade.
 
 on:
   issues:
@@ -29,6 +34,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
+      contents: read # getContent on .github/labels.yml
     steps:
       - name: Sync form-managed labels
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -80,12 +86,19 @@ jobs:
               return firstLine;
             }
 
-            // Fixed allowlists — the issue body is untrusted input, so every
-            // label this script adds must be validated against a hardcoded
-            // constant, never derived from body text alone (addLabels
+            // Allowlists — the issue body is untrusted input, so every label
+            // this script adds must be validated against a list the body cannot
+            // influence, never derived from body text alone (addLabels
             // auto-creates unknown labels, so an unconstrained regex match
-            // would let a crafted body mint arbitrary labels).
+            // would let a crafted body mint arbitrary labels). Priorities and
+            // subtypes are fixed constants; area:* is read from labels.yml
+            // (below), which only a merged PR can change.
             const ALLOWED_PRIORITIES = ['p0', 'p1', 'p2', 'p3'];
+            // Deliberately NOT read from labels.yml: a repo running the
+            // coarse-Type label fallback (ADR-0006) declares type:bug and
+            // type:feature there, and a crafted "### Subtype" line must not be
+            // able to mint a coarse Type on a Task. scripts/check-label-forms.sh
+            // keeps this list and task.yml's dropdown equal.
             const ALLOWED_SUBTYPES = ['chore', 'ops', 'docs', 'security'];
             // The exact type:* labels this workflow owns. Deliberately NOT
             // `label.startsWith('type:')`: only task.yml has a Subtype dropdown,
@@ -93,9 +106,38 @@ jobs:
             // type:* label — and a prefix match would put every hand-applied
             // type:* label into `toRemove` and strip it on the next body edit.
             const FORM_MANAGED_TYPES = ALLOWED_SUBTYPES.map((s) => `type:${s}`);
-            // Must stay in sync with the area:* entries in .github/labels.yml;
-            // adopters editing area labels update both.
-            const ALLOWED_AREAS = ['area:docs', 'area:skills', 'area:ci', 'area:governance'];
+
+            // area:* allowlist = every `- name: area:...` entry in
+            // .github/labels.yml on the DEFAULT branch. The default branch, not
+            // the event ref, so a PR branch's copy cannot widen the list. The
+            // parse mirrors parse_labels_yml in scripts/bootstrap.sh: an entry
+            // is a `- name:` line, and a commented-out entry starts with # and
+            // never matches. A read failure THROWS — an empty allowlist is not
+            // a safe default, because `desired` would then hold no area:* and
+            // every area label already on the issue would land in toRemove.
+            async function loadAllowedAreas() {
+              const ref = context.payload.repository.default_branch;
+              const { data } = await github.rest.repos.getContent({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                path: '.github/labels.yml',
+                ref,
+              });
+              if (!data || data.type !== 'file' || typeof data.content !== 'string') {
+                throw new Error(`.github/labels.yml is not a readable file on ${ref}`);
+              }
+              const yml = Buffer.from(data.content, 'base64').toString('utf8');
+              const areas = [];
+              for (const line of yml.split(/\r?\n/)) {
+                const m = line.match(/^\s*-\s*name:\s*["']?(area:[^\s"'#]+)["']?\s*(?:#.*)?$/);
+                if (m) areas.push(m[1]);
+              }
+              if (areas.length === 0) {
+                core.warning(`no area:* entries in .github/labels.yml on ${ref} — Area checkboxes will apply nothing`);
+              }
+              return areas;
+            }
+            const ALLOWED_AREAS = await loadAllowedAreas();
 
             const desired = new Set();
 
@@ -118,8 +160,12 @@ jobs:
             if (areaText) {
               const checkedLines = areaText.split(/\r?\n/).filter((line) => /^-\s*\[[xX]\]/.test(line));
               for (const line of checkedLines) {
-                const match = line.match(/area:[a-z-]+/);
-                if (match && ALLOWED_AREAS.includes(match[0])) desired.add(match[0]);
+                // The option text is "area:<name> — <description>"; the name is
+                // the token before the first whitespace. Any non-space
+                // characters are allowed in the name (digits, underscores) —
+                // the allowlist decides, not a character class.
+                const match = line.match(/^-\s*\[[xX]\]\s*(area:\S+)/);
+                if (match && ALLOWED_AREAS.includes(match[1])) desired.add(match[1]);
               }
             }
 

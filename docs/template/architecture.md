@@ -16,7 +16,7 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Sync option lists with `labels.yml` |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Validation ladder + RISK convention at point of use | Near zero |
 | `.github/workflows/ci.yml` | L0 gate; installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` or `runs-on:` | SHA-pin bumps via Dependabot |
-| `.github/workflows/issue-labeler.yml` | Form selections → labels (single-home preserving) | Allowlist sync with `labels.yml` |
+| `.github/workflows/issue-labeler.yml` | Form selections → labels (single-home preserving); `area:*` allowlist read from `labels.yml` at run time | `ALLOWED_PRIORITIES` / `ALLOWED_SUBTYPES` must match the forms |
 | `.github/workflows/maintenance.yml` | Weekly drift detectors: external link check + CI tool version check | Near zero |
 | `.github/workflows/release-please.yml` + configs | Human-gated release automation (ADR-0002) | Action SHA bumps; `initial-version` pins adopters' first release and is inert afterwards |
 | `.github/rulesets/main-branch.json` | Importable branch protection (PR + green `ci` required) | Near zero |
