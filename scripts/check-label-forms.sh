@@ -37,6 +37,11 @@
 #   h. if the labeler still extracts area names with the `[a-z-]` grammar,
 #      every area:* name must fit it, or the box would tick and apply nothing
 #      (newer labelers take any non-whitespace token).
+#   i. if the labeler still pre-filters priorities with /^(p[0-3])\b/ or
+#      subtypes with a literal alternation, those must agree with the
+#      allowlists — a consistently declared priority:p4 would otherwise pass
+#      every set comparison and be ignored at run time (newer labelers match
+#      the leading token and let the allowlist decide).
 #
 # Usage: scripts/check-label-forms.sh [labels-yml] [forms-dir] [labeler-yml]
 #   Defaults: .github/labels.yml .github/ISSUE_TEMPLATE
@@ -186,6 +191,23 @@ else
       "fix: edit the ALLOWED_AREAS constant in $LABELER_FILE — or take the labeler that reads labels.yml at run time (github-project-os #45)"
   else
     ok "labeler declares no ALLOWED_AREAS constant (reads area:* from $LABELS_FILE at run time)"
+  fi
+
+  # --- i: older labelers duplicate the allowlists as regexes
+  if grep -qF '/^(p[0-3])\b/' "$LABELER_FILE"; then
+    off="$(printf '%s\n' "$priorities" | grep -vE '^priority:p[0-3]$' || true)"
+    if [ -n "$off" ]; then
+      fail "labeler pre-filters priorities with /^(p[0-3])\\b/ and these are outside it (declared everywhere, ignored at run time): $(printf '%s\n' "$off" | tr '\n' ' ')"
+      echo "      fix: take the labeler that matches the leading token against ALLOWED_PRIORITIES (github-project-os #45), or keep priorities within p0-p3"
+    else
+      ok "every priority:* fits the labeler's /^(p[0-3])\\b/ pre-filter"
+    fi
+  fi
+  sub_re="$(grep -oE '/\^\(([a-z|]+)\)\\b/' "$LABELER_FILE" | grep -v 'p\[0-3\]' | head -n1 | sed -E 's#^/\^\((.*)\)\\b/$#\1#' || true)"
+  if [ -n "$sub_re" ]; then
+    re_set="$(printf '%s\n' "$sub_re" | tr '|' '\n' | with_prefix 'type:')"
+    compare "labeler subtype pre-filter regex /^($sub_re)\\b/ matches ALLOWED_SUBTYPES" "$lab_sub" "$re_set" \
+      "fix: take the labeler that matches the leading token against ALLOWED_SUBTYPES (github-project-os #45), or keep the regex and the constant equal"
   fi
 
   # --- h: older labelers only parse [a-z-] area names
