@@ -25,7 +25,7 @@ is silently ignored and the API accepts a type and stores `null`. The reliable
 check is GraphQL, which returns `null` where types cannot be applied:
 
 ```bash
-gh api graphql -f query='query($o:String!,$n:String!){ repository(owner:$o,name:$n){ issueTypes(first:20){ nodes{ name } } } }' -f o={owner} -f n={repo} --jq '.data.repository.issueTypes'
+gh api graphql -f query='query($o:String!,$n:String!){ repository(owner:$o,name:$n){ issueTypes(first:20){ nodes{ name } } } }' -F o='{owner}' -F n='{repo}' --jq '.data.repository.issueTypes'
 ```
 
 `null` means the forms' `type:` key does nothing — the form still captures
