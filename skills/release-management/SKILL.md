@@ -73,9 +73,12 @@ gh release edit v0.2.0 --notes "TLDR: ...\n\n$(gh release view v0.2.0 --json bod
 - The release PR shows no checks and cannot merge. The `ci` run exists but is parked with conclusion `action_required` — GitHub holds workflow runs on PRs opened with the default `GITHUB_TOKEN` (its recursion guard) until someone approves them. Approve the parked run; closing and reopening the PR does not release it:
 
   ```bash
-  id=$(gh run list --branch release-please--branches--main --limit 1 --json databaseId --jq '.[0].databaseId')
+  sha=$(gh pr view <release-pr#> --json headRefOid --jq .headRefOid)
+  id=$(gh run list --workflow ci.yml --commit "$sha" --status action_required --json databaseId --jq '.[0].databaseId')
   gh api -X POST "repos/<owner>/<repo>/actions/runs/$id/approve"
   ```
+
+  Select by commit, workflow and status rather than by branch name — on a public repository a fork PR can share the predictable `release-please--branches--main` branch name, and approving *its* run would leave the release PR still parked.
 
   The alternative is to run release-please with a Personal Access Token that can trigger workflows, at the cost of managing that token. Do not push an empty commit to the release branch to wake CI — it lands in the release commit's history for nothing.
 
