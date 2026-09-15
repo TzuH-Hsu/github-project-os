@@ -129,7 +129,12 @@ jobs:
               const yml = Buffer.from(data.content, 'base64').toString('utf8');
               const areas = [];
               for (const line of yml.split(/\r?\n/)) {
-                const m = line.match(/^\s*-\s*name:\s*["']?(area:[^\s"'#]+)["']?\s*(?:#.*)?$/);
+                // Same reading as parse_labels_yml: the name is everything after
+                // `name:` with surrounding whitespace trimmed — no quote or
+                // comment stripping, so area:c# and area:team's survive intact
+                // and a quoted or inline-commented entry is wrong here exactly
+                // as it is wrong for bootstrap (labels.yml's header rules both out).
+                const m = line.match(/^\s*-\s*name:\s*(area:\S.*?)\s*$/);
                 if (m) areas.push(m[1]);
               }
               if (areas.length === 0) {
