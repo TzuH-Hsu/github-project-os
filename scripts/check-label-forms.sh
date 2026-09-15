@@ -147,11 +147,16 @@ EOF_NAMES
   printf '?%s\n' "$text"
 }
 
-# form_options <form> <field-id> <declared-names> — each option resolved.
+# form_options <form> <field-id> <declared-names> [lower] — each option
+# resolved. With `lower`, the option text is folded to lowercase first: the
+# labeler lowercases dropdown answers before matching (so `P0 — Critical`
+# still resolves to p0) but reads checkbox lines as written.
 form_options() {
   local text
   form_option_texts "$1" "$2" | while IFS= read -r text; do
-    [ -n "$text" ] && resolve_option "$text" "$3"
+    [ -n "$text" ] || continue
+    if [ "${4:-}" = lower ]; then text="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"; fi
+    resolve_option "$text" "$3"
   done
 }
 
@@ -247,12 +252,12 @@ for path in "$FORMS_DIR"/*.yml "$FORMS_DIR"/*.yaml; do
       "fix: one \`- label: \"<name> — <text>\"\` line per area:* entry, under the field whose id is 'area'"
   fi
   if has_field "$path" priority; then
-    found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" | with_prefix 'priority:')"
+    found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" lower | with_prefix 'priority:')"
     compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
       "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
   fi
   if has_field "$path" subtype; then
-    found_sub="$(form_options "$path" subtype "$(printf '%s\n' "$subtypes" | sed 's/^type://')" | with_prefix 'type:')"
+    found_sub="$(form_options "$path" subtype "$(printf '%s\n' "$subtypes" | sed 's/^type://')" lower | with_prefix 'type:')"
     compare "$form Subtype options match the type:* set in $LABELS_FILE minus the coarse-Type fallback labels" "$subtypes" "$found_sub" \
       "fix: one \`- \"<subtype> — <text>\"\` line per subtype, under the field whose id is 'subtype' (never bug or feature)"
     # --- e: the security property
