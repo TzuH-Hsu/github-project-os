@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.3.0...v0.3.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* phase 2 probes GraphQL so personal accounts are reported as lacking native issue types ([#43](https://github.com/TzuH-Hsu/github-project-os/issues/43)) ([d16f465](https://github.com/TzuH-Hsu/github-project-os/commit/d16f4657e57a3ef894d3bfa07a162169a1ff16f8))
+
 ## [0.3.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.2.0...v0.3.0) (2026-09-15)
 
 
