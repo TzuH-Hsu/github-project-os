@@ -10,13 +10,17 @@
 # area:* (as the template tells them to) and found out two weeks later.
 #
 # Verifies:
-#   a. each issue form's Area checkboxes    == the area:* set in labels.yml
-#   b. each issue form's Priority dropdown  == the priority:* set in labels.yml
-#   c. the labeler's ALLOWED_PRIORITIES     == the priority:* set in labels.yml
-#   d. task.yml's Subtype dropdown          == the labeler's ALLOWED_SUBTYPES
-#                                           == the type:* set in labels.yml
-#                                              minus type:bug / type:feature
-#   e. type:bug / type:feature never appear in the Subtype dropdown — the
+# Every *.yml / *.yaml in the forms directory except config.yml is a form —
+# discovered, not listed, so a renamed or added form is checked too. A form
+# is checked for whichever of the three managed fields (ids area, priority,
+# subtype) it has.
+#
+#   a. a form's Area checkboxes    == the area:* set in labels.yml
+#   b. a form's Priority dropdown  == the priority:* set in labels.yml
+#   c. the labeler's ALLOWED_PRIORITIES == the priority:* set in labels.yml
+#   d. a form's Subtype dropdown   == the type:* set in labels.yml minus
+#      type:bug / type:feature, and the labeler's ALLOWED_SUBTYPES == the same
+#   e. type:bug / type:feature never appear in a Subtype dropdown — the
 #      labeler's subtype allowlist exists so an untrusted issue body cannot
 #      mint a coarse Type (ADR-0006); this pins that property.
 #   f. no `- name:` entry in labels.yml is quoted — the header forbids it,
@@ -32,7 +36,7 @@
 # dash (see h. for what older labelers can and cannot read). An option that
 # resolves to no declared name is reported as `?<option text>`.
 #
-#   j. while the labeler workflow exists, each form field it reads must keep
+#   j. while the labeler workflow exists, each managed field it reads must keep
 #      the heading it reads — `label: Priority`, `label: Subtype`,
 #      `label: Area` — because the issue body carries headings, not field
 #      ids; renaming one blinds the labeler while ids and options still match.
@@ -68,7 +72,6 @@ LABELS_FILE="${1:-.github/labels.yml}"
 FORMS_DIR="${2:-.github/ISSUE_TEMPLATE}"
 LABELER_FILE="${3:-.github/workflows/issue-labeler.yml}"
 
-FORMS="bug_report.yml feature_request.yml task.yml"
 FALLBACK_TYPES="type:bug type:feature"
 
 fail_count=0
@@ -151,6 +154,9 @@ form_options() {
   done
 }
 
+# Does form $1 declare a field whose `id:` is $2?
+has_field() { grep -qE "^[[:space:]]*id:[[:space:]]*$2[[:space:]]*$" "$1"; }
+
 # The `label:` attribute (the heading the issue body will carry) of the form
 # field whose `id:` is $2, in form $1.
 form_heading() {
@@ -219,24 +225,43 @@ areas="$(printf '%s\n' "$all_names" | grep '^area:' | sort -u || true)"
 priorities="$(printf '%s\n' "$all_names" | grep '^priority:' | sort -u || true)"
 subtypes="$(printf '%s\n' "$all_names" | grep '^type:' | grep -v -x -e 'type:bug' -e 'type:feature' | sort -u || true)"
 
-# --- a/b: forms vs labels.yml
-for form in $FORMS; do
-  path="$FORMS_DIR/$form"
-  if [ ! -f "$path" ]; then
-    echo "SKIP: $path not present"
-    continue
+# --- a/b/d/e/j: forms vs labels.yml
+forms_seen=0
+for path in "$FORMS_DIR"/*.yml "$FORMS_DIR"/*.yaml; do
+  [ -f "$path" ] || continue
+  form="$(basename "$path")"
+  case "$form" in config.yml|config.yaml) continue ;; esac
+  forms_seen=$((forms_seen + 1))
+  if has_field "$path" area; then
+    found_areas="$(form_options "$path" area "$areas" | with_prefix '')"
+    compare "$form Area options match the area:* set in $LABELS_FILE" "$areas" "$found_areas" \
+      "fix: one \`- label: \"<name> — <text>\"\` line per area:* entry, under the field whose id is 'area'"
   fi
-  found_areas="$(form_options "$path" area "$areas" | with_prefix '')"
-  compare "$form Area options match the area:* set in $LABELS_FILE" "$areas" "$found_areas" \
-    "fix: one \`- label: \"<name> — <text>\"\` line per area:* entry, under the field whose id is 'area'"
-  found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" | with_prefix 'priority:')"
-  compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
-    "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
+  if has_field "$path" priority; then
+    found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" | with_prefix 'priority:')"
+    compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
+      "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
+  fi
+  if has_field "$path" subtype; then
+    found_sub="$(form_options "$path" subtype "$(printf '%s\n' "$subtypes" | sed 's/^type://')" | with_prefix 'type:')"
+    compare "$form Subtype options match the type:* set in $LABELS_FILE minus the coarse-Type fallback labels" "$subtypes" "$found_sub" \
+      "fix: one \`- \"<subtype> — <text>\"\` line per subtype, under the field whose id is 'subtype' (never bug or feature)"
+    # --- e: the security property
+    leaked=""
+    for t in $FALLBACK_TYPES; do
+      if printf '%s\n' "$found_sub" | grep -qx "$t"; then leaked="$leaked $t"; fi
+    done
+    if [ -n "$leaked" ]; then
+      fail "$form Subtype dropdown offers$leaked — the coarse-Type fallback labels are applied by hand only, never from a form field an untrusted body can spoof (ADR-0006)"
+    else
+      ok "$form Subtype dropdown offers neither type:bug nor type:feature"
+    fi
+  fi
   # --- j: the headings the labeler reads (only while there is a labeler)
   [ -f "$LABELER_FILE" ] || continue
   for pair in "area:Area" "priority:Priority" "subtype:Subtype"; do
     fid="${pair%%:*}"; want="${pair#*:}"
-    [ "$fid" = subtype ] && [ "$form" != task.yml ] && continue
+    has_field "$path" "$fid" || continue
     got="$(form_heading "$path" "$fid")"
     if [ "$got" = "$want" ]; then
       ok "$form field '$fid' keeps the heading the labeler reads: $want"
@@ -245,6 +270,9 @@ for form in $FORMS; do
     fi
   done
 done
+if [ "$forms_seen" -eq 0 ]; then
+  echo "SKIP: no issue forms in $FORMS_DIR"
+fi
 
 # --- c/d: labeler constants
 if [ ! -f "$LABELER_FILE" ]; then
@@ -301,22 +329,6 @@ else
       echo "      fix: rename to lowercase letters and hyphens, or take the labeler from github-project-os #45"
     else
       ok "every area:* name fits the labeler's /area:[a-z-]+/ grammar"
-    fi
-  fi
-  task="$FORMS_DIR/task.yml"
-  if [ -f "$task" ]; then
-    task_sub="$(form_options "$task" subtype "$(printf '%s\n' "$subtypes" | sed 's/^type://')" | with_prefix 'type:')"
-    compare "task.yml Subtype options match the labeler's ALLOWED_SUBTYPES" "$lab_sub" "$task_sub" \
-      "fix: one \`- \"<subtype> — <text>\"\` line per subtype, under the field whose id is 'subtype'"
-    # --- e: the security property
-    leaked=""
-    for t in $FALLBACK_TYPES; do
-      if printf '%s\n' "$task_sub" | grep -qx "$t"; then leaked="$leaked $t"; fi
-    done
-    if [ -n "$leaked" ]; then
-      fail "task.yml Subtype dropdown offers$leaked — the coarse-Type fallback labels are applied by hand only, never from a form field an untrusted body can spoof (ADR-0006)"
-    else
-      ok "task.yml Subtype dropdown offers neither type:bug nor type:feature"
     fi
   fi
 fi
