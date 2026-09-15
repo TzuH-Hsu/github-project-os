@@ -443,24 +443,31 @@ coarse_type_fallback_state() {
 phase_issue_types() {
   doing "Phase 2: native issue types"
 
-  # Check the gh exit code explicitly instead of relying on stdout
-  # emptiness: on an HTTP error (e.g. the guaranteed 404 on personal-account
-  # repos) `gh api` prints the raw JSON error body to STDOUT — only the
-  # one-line summary goes to stderr — so a plain `2>/dev/null || true`
-  # capture would hold the error body as if it were data and never reach
-  # the unavailable branch below.
+  # Probe GraphQL, not REST. On a personal-account repo the REST endpoint
+  # repos/{repo}/issue-types lists Bug/Feature/Task with is_enabled=true, yet
+  # none of them can be applied: the form's top-level 'type:' key is ignored,
+  # and REST/GraphQL mutations succeed with type=null. GraphQL
+  # repository.issueTypes is null on exactly those repos and lists the types
+  # on org repos, so its nullability is the discriminator (issue #42).
+  # Three outcomes, kept distinct: request failed (unknown — say so, never
+  # report it as unavailable), null (unavailable), or a list (present).
+  # shellcheck disable=SC2016  # $o/$n are GraphQL variables, not shell
+  local gql_query='query($o:String!,$n:String!){ repository(owner:$o,name:$n){ issueTypes(first:20){ nodes{ name isEnabled } } } }'
+  local gql_jq='.data.repository.issueTypes | if . == null then "__NULL__" else (.nodes[] | select(.isEnabled) | .name) end'
   local types
-  if ! types="$(gh api "repos/${REPO}/issue-types" --jq '.[].name' 2>/dev/null)"; then
-    types=""
+  if ! types="$(gh api graphql -f query="$gql_query" -f o="${REPO%%/*}" -f n="${REPO#*/}" --jq "$gql_jq" 2>/dev/null)"; then
+    warn "could not query issue types (GraphQL request failed) — cannot tell whether native types apply to ${REPO}"
+    manual "Re-run bootstrap once 'gh api graphql' works, or check by hand: open a new issue from a form and see whether it carries a Type. If it does not, see 'When native issue types are unavailable' in .github/PROJECT_FIELDS.md"
+    record_phase "2. Issue types" "warn"
+    return
   fi
 
-  if [ -z "$types" ]; then
-    warn "repos/${REPO}/issue-types returned 404/empty"
-    warn "native issue types are unavailable on this repo, so the issue forms' 'type:' key is silently ignored:"
+  if [ "$types" = "__NULL__" ] || [ -z "$types" ]; then
+    warn "native issue types cannot be applied on ${REPO}, so the issue forms' 'type:' key is silently ignored"
+    warn "  - personal account: GitHub lists Bug/Feature/Task for user repos but does not let issues carry them — this is expected, not a misconfiguration"
     warn "  - org repo: enable/verify Bug/Feature/Task in Organization settings -> Repository -> Issue types"
-    warn "  - personal account: GitHub rolled these out to user accounts too, so check Settings -> Issue types before assuming you cannot have them"
-    warn "  see .github/PROJECT_FIELDS.md for the documented fallback on personal accounts"
-    manual "Enable native issue types if you can — org repos in Organization settings, personal accounts in Settings → Issue types. If they are genuinely unavailable, see 'When native issue types are unavailable' in .github/PROJECT_FIELDS.md for the label fallback"
+    warn "  see .github/PROJECT_FIELDS.md for the documented fallback"
+    manual "Org repo: enable native issue types in Organization settings → Repository → Issue types. Personal account: they cannot be applied — see 'When native issue types are unavailable' in .github/PROJECT_FIELDS.md for the label fallback"
     case "$(coarse_type_fallback_state)" in
       both)
         ok "label fallback in use — coarse Type home is type:bug / type:feature (see .github/PROJECT_FIELDS.md)"
@@ -519,8 +526,7 @@ phase_milestone() {
   # state=all: milestones default to state=open-only on this endpoint, which
   # would miss a closed v0.1.0 and attempt to recreate it.
   # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON
-  # error body to stdout, so `|| true` would leave error text in $existing
-  # (same failure mode as phase 2's issue-types check).
+  # error body to stdout, so `|| true` would leave error text in $existing.
   local existing
   if ! existing="$(gh api "repos/${REPO}/milestones?state=all" --jq '.[].title' 2>/dev/null)"; then
     existing=""
@@ -838,7 +844,7 @@ phase_security() {
   # with admin permission on the repo -- it comes back null otherwise -- so the
   # "unknown" fallbacks below mean "could not read", never "disabled".
   # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON error
-  # body to stdout (same failure mode as phase 2's issue-types check).
+  # body to stdout, not stderr.
   local facts
   if ! facts="$(gh api "repos/${REPO}" --jq '[.visibility, (.security_and_analysis.secret_scanning.status // "unknown"), (.security_and_analysis.secret_scanning_push_protection.status // "unknown")] | @tsv' 2>/dev/null)"; then
     facts=""
@@ -1001,8 +1007,7 @@ phase_ruleset() {
   fi
 
   # Exit code checked explicitly: on HTTP errors `gh api` prints the JSON
-  # error body to stdout, so `|| true` would leave error text in $existing
-  # (same failure mode as phase 2's issue-types check).
+  # error body to stdout, so `|| true` would leave error text in $existing.
   local existing
   if ! existing="$(gh api "repos/${REPO}/rulesets" --jq '.[].name' 2>/dev/null)"; then
     existing=""

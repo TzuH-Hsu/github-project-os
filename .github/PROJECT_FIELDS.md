@@ -18,17 +18,19 @@ Every issue/PR attribute lives in **exactly one place**. Never dual-write the sa
 
 ## When native issue types are unavailable
 
-Native issue types began as an organization-only feature and have since been
-rolled out to personal accounts as well, so **check rather than assume**:
+Native issue types are an organization feature. A personal-account repository
+*lists* `Bug` / `Feature` / `Task` at `repos/{owner}/{repo}/issue-types`, which
+is misleading: no issue there can carry one — the forms' top-level `type:` key
+is silently ignored and the API accepts a type and stores `null`. The reliable
+check is GraphQL, which returns `null` where types cannot be applied:
 
 ```bash
-gh api repos/{owner}/{repo}/issue-types --jq '.[].name'
+gh api graphql -f query='query($o:String!,$n:String!){ repository(owner:$o,name:$n){ issueTypes(first:20){ nodes{ name } } } }' -F o='{owner}' -F n='{repo}' --jq '.data.repository.issueTypes'
 ```
 
-If that 404s or comes back empty, the issue forms' top-level `type:` key is
-silently ignored — the form still captures intent at creation, but nothing
-stores it. Bootstrap phase 2 runs this check for you and says which case you
-are in.
+`null` means the forms' `type:` key does nothing — the form still captures
+intent at creation, but nothing stores it. Bootstrap phase 2 runs this check
+for you and says which case you are in.
 
 The coarse Type row above therefore has **no home by default** on a personal
 account. There are two supported resolutions, and you pick exactly one:

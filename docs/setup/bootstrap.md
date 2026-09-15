@@ -94,16 +94,15 @@ by hand (name, color, description), then delete anything not on that list.
 
 ### 2. Issue types
 
-Checks whether native issue types (`Bug`/`Feature`/`Task`) are available via
-`gh api repos/{repo}/issue-types`. This endpoint isn't available on every
-plan/org configuration.
+Checks whether native issue types (`Bug`/`Feature`/`Task`) can actually be
+applied here, by reading GraphQL `repository.issueTypes`. That field is `null`
+on every personal-account repository — even though the REST endpoint
+`repos/{repo}/issue-types` lists the three types there, no issue can carry one.
+Do not use the REST listing as the check.
 
-Manual: **Organization settings → Repository → Issue types** on an org repo, or
-**Settings → Issue types** on a personal account — these began as an
-organization-only feature and have since been rolled out to user accounts, so
-check the endpoint rather than assuming from your account type. If they really
-are unavailable, the issue forms' `type:` key is silently ignored by GitHub; the
-form still works, it just won't set a native type.
+Manual: **Organization settings → Repository → Issue types** on an org repo. On
+a personal account there is nothing to enable: the issue forms' `type:` key is
+silently ignored by GitHub, the form still works, it just won't set a type.
 On a personal account you then choose one of two things, and the phase tells
 you which you currently have:
 
@@ -393,11 +392,11 @@ admin, or set the four toggles by hand in **Settings → Advanced Security**.
 doesn't request the `project` scope. Fix: `gh auth refresh -s project`, then
 re-run.
 
-**`issue-types` endpoint returns 404 / empty** — the repo has no native issue
-types, so the issue forms' `type:` key has no effect. These began as an
-organization-only feature and have since been rolled out to personal accounts
-as well, so check **Settings → Issue types** (or the org equivalent) before
-concluding you cannot have them. If they genuinely are unavailable and you want
+**Phase 2 says native issue types cannot be applied** — the issue forms'
+`type:` key has no effect on this repo. On a personal account that is the
+normal state, not a misconfiguration (the REST `issue-types` listing you may
+find is not usable there). On an org repo, enable them in **Organization
+settings → Repository → Issue types**. If they are unavailable and you want
 a queryable coarse Type, uncomment the `type:bug` / `type:feature` block in
 `.github/labels.yml` and re-run — those labels are applied by hand, never by the
 labeler workflow.
