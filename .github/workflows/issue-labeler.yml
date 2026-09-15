@@ -146,26 +146,28 @@ jobs:
 
             const desired = new Set();
 
-            // Dropdown option text is "<value> — <description>": the value is
-            // the token before the first whitespace, and the allowlist alone
-            // decides whether it counts. No second regex spelling out the
-            // same values — that is a list that drifts (#46 checks the rest).
-            function leadingToken(line) {
-              const match = line.match(/^(\S+)/);
-              return match ? match[1] : null;
+            // Option text is "<value> — <description>": the value is everything
+            // before the first dash (—, – or -) with whitespace on both sides,
+            // trimmed — so a name may contain spaces, as GitHub labels can. The
+            // allowlist alone decides whether it counts; no second regex
+            // spelling out the same values (scripts/check-label-forms.sh keeps
+            // the forms and labels.yml on this convention).
+            function optionValue(text) {
+              const value = text.split(/\s+[—–-]\s+/, 1)[0].trim();
+              return value || null;
             }
 
             // ### Priority -> priority:pX (dropdown, e.g. "p0 — Critical, drop everything")
             const priorityLine = dropdownPrefix('Priority');
             if (priorityLine) {
-              const value = leadingToken(priorityLine);
+              const value = optionValue(priorityLine);
               if (value && ALLOWED_PRIORITIES.includes(value)) desired.add(`priority:${value}`);
             }
 
             // ### Subtype -> type:X (task form only; dropdown, e.g. "chore — Maintenance")
             const subtypeLine = dropdownPrefix('Subtype');
             if (subtypeLine) {
-              const value = leadingToken(subtypeLine);
+              const value = optionValue(subtypeLine);
               if (value && ALLOWED_SUBTYPES.includes(value)) desired.add(`type:${value}`);
             }
 
@@ -174,12 +176,11 @@ jobs:
             if (areaText) {
               const checkedLines = areaText.split(/\r?\n/).filter((line) => /^-\s*\[[xX]\]/.test(line));
               for (const line of checkedLines) {
-                // The option text is "area:<name> — <description>"; the name is
-                // the token before the first whitespace. Any non-space
-                // characters are allowed in the name (digits, underscores) —
+                // "- [x] area:<name> — <description>": same rule as the
+                // dropdowns, so the name may contain spaces or punctuation;
                 // the allowlist decides, not a character class.
-                const match = line.match(/^-\s*\[[xX]\]\s*(area:\S+)/);
-                if (match && ALLOWED_AREAS.includes(match[1])) desired.add(match[1]);
+                const value = optionValue(line.replace(/^-\s*\[[xX]\]\s*/, ''));
+                if (value && ALLOWED_AREAS.includes(value)) desired.add(value);
               }
             }
 
