@@ -26,10 +26,17 @@
 # whitespace, e.g. `- label: "area:docs — Documentation and guides"` or
 # `- "p0 — Critical, drop everything"`. Only the names are compared; the
 # descriptive text is free. Names therefore cannot contain whitespace (the
-# labeler reads the checked token the same way); any other character is fine.
+# labeler reads the checked token the same way); any other character is fine
+# with a labeler that reads labels.yml at run time — see h. for older ones.
 #
-# The area:* allowlist in the labeler is NOT checked: it is read from
-# labels.yml at run time, so it cannot drift.
+# The labeler's area:* handling depends on its version, and this script may
+# run in an adopted repo carrying an older copy, so it looks at the file:
+#   g. if the labeler still declares a hardcoded ALLOWED_AREAS constant, that
+#      constant must equal the area:* set (newer labelers read labels.yml at
+#      run time and have no such constant — reported, not failed);
+#   h. if the labeler still extracts area names with the `[a-z-]` grammar,
+#      every area:* name must fit it, or the box would tick and apply nothing
+#      (newer labelers take any non-whitespace token).
 #
 # Usage: scripts/check-label-forms.sh [labels-yml] [forms-dir] [labeler-yml]
 #   Defaults: .github/labels.yml .github/ISSUE_TEMPLATE
@@ -171,6 +178,26 @@ else
   lab_sub="$(labeler_list "$LABELER_FILE" ALLOWED_SUBTYPES | with_prefix 'type:')"
   compare "labeler ALLOWED_SUBTYPES matches the type:* set in $LABELS_FILE minus the coarse-Type fallback labels" "$subtypes" "$lab_sub" \
     "fix: edit the ALLOWED_SUBTYPES constant in $LABELER_FILE (never add bug or feature to it)"
+
+  # --- g: older labelers hardcode the area allowlist
+  if grep -qE 'const ALLOWED_AREAS = \[' "$LABELER_FILE"; then
+    lab_areas="$(labeler_list "$LABELER_FILE" ALLOWED_AREAS | with_prefix '')"
+    compare "labeler ALLOWED_AREAS matches the area:* set in $LABELS_FILE" "$areas" "$lab_areas" \
+      "fix: edit the ALLOWED_AREAS constant in $LABELER_FILE — or take the labeler that reads labels.yml at run time (github-project-os #45)"
+  else
+    ok "labeler declares no ALLOWED_AREAS constant (reads area:* from $LABELS_FILE at run time)"
+  fi
+
+  # --- h: older labelers only parse [a-z-] area names
+  if grep -qF '/area:[a-z-]+/' "$LABELER_FILE"; then
+    unparsable="$(printf '%s\n' "$areas" | grep -vE '^area:[a-z-]+$' || true)"
+    if [ -n "$unparsable" ]; then
+      fail "labeler extracts area names with /area:[a-z-]+/ and these names do not fit it (the box would tick and apply nothing): $(printf '%s\n' "$unparsable" | tr '\n' ' ')"
+      echo "      fix: rename to lowercase letters and hyphens, or take the labeler from github-project-os #45"
+    else
+      ok "every area:* name fits the labeler's /area:[a-z-]+/ grammar"
+    fi
+  fi
   task="$FORMS_DIR/task.yml"
   if [ -f "$task" ]; then
     task_sub="$(form_options "$task" subtype | with_prefix 'type:')"
