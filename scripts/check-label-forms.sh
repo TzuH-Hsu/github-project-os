@@ -22,14 +22,15 @@
 #   f. no `- name:` entry in labels.yml is quoted — the header forbids it,
 #      and bootstrap would create a label with the quotes in its name.
 #
-# Option text convention: `<name> — <description>` — the name is everything
-# before the first dash (—, – or -) that has whitespace on both sides,
-# trimmed; with no such separator the whole option is the name. E.g.
-# `- label: "area:docs — Documentation and guides"` names area:docs and
-# `- "p0 — Critical, drop everything"` names p0. Only the names are compared;
-# the description is free. The labeler reads the same option text from the
-# issue body with the same rule, so a name may contain spaces or punctuation
-# (see h. for older labelers), but not a spaced dash.
+# Option text convention: `<name> — <description>`. An option is resolved to
+# a name the same way the labeler resolves it from the issue body: the
+# longest declared name the option text starts with, followed by the end of
+# the text or a dash (—, – or -) with whitespace on both sides. E.g.
+# `- label: "area:docs — Documentation and guides"` resolves to area:docs and
+# `- "p0 — Critical, drop everything"` to p0. Only the names are compared; the
+# description is free. Names may contain spaces, punctuation, even a spaced
+# dash (see h. for what older labelers can and cannot read). An option that
+# resolves to no declared name is reported as `?<option text>`.
 #
 #   j. each form field the labeler reads must keep the heading it reads —
 #      `label: Priority`, `label: Subtype`, `label: Area` — because the issue
@@ -42,8 +43,9 @@
 #      constant must equal the area:* set (newer labelers read labels.yml at
 #      run time and have no such constant — reported, not failed);
 #   h. if the labeler still extracts area names with the `[a-z-]` grammar,
-#      every area:* name must fit it, or the box would tick and apply nothing
-#      (newer labelers take any non-whitespace token).
+#      every area:* name must fit it, or the box would tick and apply nothing;
+#      likewise the short-lived `area:\S+` grammar cannot read a name with
+#      whitespace (current labelers match against the allowlist instead).
 #   i. if the labeler still pre-filters priorities with /^(p[0-3])\b/ or
 #      subtypes with a literal alternation, those must agree with the
 #      allowlists — a consistently declared priority:p4 would otherwise pass
@@ -96,11 +98,11 @@ label_names() {
   ' "$1"
 }
 
-# Option names of the form field whose `id:` is $2, in form $1. The field
-# block starts at its `id:` line and ends at the next `- type:` field. Inside
-# it, option lines are `- label: "..."` (checkboxes) or `- "..."` (dropdown);
-# the name is the quoted text up to the first spaced dash, trimmed.
-form_options() {
+# Option texts of the form field whose `id:` is $2, in form $1, one per line,
+# quotes stripped. The field block starts at its `id:` line and ends at the
+# next `- type:` field. Inside it, option lines are `- label: "..."`
+# (checkboxes) or `- "..."` (dropdown).
+form_option_texts() {
   awk -v want="$2" '
     /^[[:space:]]*-[[:space:]]*type:/ { inblock = 0 }
     /^[[:space:]]*id:[[:space:]]*/ {
@@ -114,11 +116,38 @@ form_options() {
       opt = $0
       sub(/^[[:space:]]*-[[:space:]]*(label:[[:space:]]*)?["'"'"']/, "", opt)
       sub(/["'"'"'][[:space:]]*$/, "", opt)
-      sub(/[[:space:]]+(—|–|-)[[:space:]]+.*$/, "", opt)
       sub(/[[:space:]]+$/, "", opt)
       print opt
     }
   ' "$1"
+}
+
+# resolve_option <text> <declared-names, newline-separated> — prints the
+# longest declared name the text starts with, followed by end-of-text or a
+# spaced dash; prints `?<text>` when none does.
+resolve_option() {
+  local text="$1" names="$2" name rest
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$text" in
+      "$name")   printf '%s\n' "$name"; return 0 ;;
+      "$name"*)  rest="${text#"$name"}"
+                 if printf '%s' "$rest" | grep -qE '^[[:space:]]+(—|–|-)[[:space:]]+'; then
+                   printf '%s\n' "$name"; return 0
+                 fi ;;
+    esac
+  done <<EOF_NAMES
+$(printf '%s\n' "$names" | awk '{ print length($0) "\t" $0 }' | sort -t"$(printf '\t')" -k1,1nr | cut -f2-)
+EOF_NAMES
+  printf '?%s\n' "$text"
+}
+
+# form_options <form> <field-id> <declared-names> — each option resolved.
+form_options() {
+  local text
+  form_option_texts "$1" "$2" | while IFS= read -r text; do
+    [ -n "$text" ] && resolve_option "$text" "$3"
+  done
 }
 
 # The `label:` attribute (the heading the issue body will carry) of the form
@@ -196,10 +225,10 @@ for form in $FORMS; do
     echo "SKIP: $path not present"
     continue
   fi
-  found_areas="$(form_options "$path" area | with_prefix '')"
+  found_areas="$(form_options "$path" area "$areas" | with_prefix '')"
   compare "$form Area options match the area:* set in $LABELS_FILE" "$areas" "$found_areas" \
     "fix: one \`- label: \"<name> — <text>\"\` line per area:* entry, under the field whose id is 'area'"
-  found_prio="$(form_options "$path" priority | with_prefix 'priority:')"
+  found_prio="$(form_options "$path" priority "$(printf '%s\n' "$priorities" | sed 's/^priority://')" | with_prefix 'priority:')"
   compare "$form Priority options match the priority:* set in $LABELS_FILE" "$priorities" "$found_prio" \
     "fix: one \`- \"<pN> — <text>\"\` line per priority:* entry, under the field whose id is 'priority'"
   # --- j: the headings the labeler reads
@@ -252,7 +281,17 @@ else
       "fix: take the labeler that matches the leading token against ALLOWED_SUBTYPES (github-project-os #45), or keep the regex and the constant equal"
   fi
 
-  # --- h: older labelers only parse [a-z-] area names
+  # --- h: older labelers only parse [a-z-] area names; one short-lived
+  #        version took any non-whitespace token
+  if grep -qF '(area:\S+)' "$LABELER_FILE"; then
+    spaced="$(printf '%s\n' "$areas" | grep '[[:space:]]' || true)"
+    if [ -n "$spaced" ]; then
+      fail "labeler extracts area names as a single non-whitespace token and these contain whitespace (the box would tick and apply nothing): $(printf '%s\n' "$spaced" | sed "s/.*/'&'/" | tr '\n' ' ')"
+      echo "      fix: take the labeler that matches against the allowlist (github-project-os #45), or remove the whitespace"
+    else
+      ok "no area:* name contains whitespace (the labeler reads a single token)"
+    fi
+  fi
   if grep -qF '/area:[a-z-]+/' "$LABELER_FILE"; then
     unparsable="$(printf '%s\n' "$areas" | grep -vE '^area:[a-z-]+$' || true)"
     if [ -n "$unparsable" ]; then
@@ -264,7 +303,7 @@ else
   fi
   task="$FORMS_DIR/task.yml"
   if [ -f "$task" ]; then
-    task_sub="$(form_options "$task" subtype | with_prefix 'type:')"
+    task_sub="$(form_options "$task" subtype "$(printf '%s\n' "$subtypes" | sed 's/^type://')" | with_prefix 'type:')"
     compare "task.yml Subtype options match the labeler's ALLOWED_SUBTYPES" "$lab_sub" "$task_sub" \
       "fix: one \`- \"<subtype> — <text>\"\` line per subtype, under the field whose id is 'subtype'"
     # --- e: the security property
