@@ -37,12 +37,63 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 
 // GitHub links closing keywords in prose only: not inside HTML comments,
 // fenced code blocks or inline code spans. Strip those before matching so the
-// check agrees with what GitHub will actually close.
+// check agrees with what GitHub will actually close. Linear scanners, not
+// lazy regexes — the body is attacker-controlled and up to 65,536 chars.
+
+// Fenced blocks (CommonMark): a line starting with 3+ backticks or tildes
+// opens; a line with the same character and at least that many closes; an
+// unclosed fence runs to the end of the document.
+function stripFencedBlocks(text) {
+  const kept = [];
+  let fence = null; // { ch, len }
+  for (const line of text.split('\n')) {
+    let m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    // a backtick fence's info string may not contain a backtick — such a line
+    // is inline code, not a fence
+    if (m && m[1][0] === '`' && m[2].includes('`')) m = null;
+    if (fence) {
+      if (m && m[1][0] === fence.ch && m[1].length >= fence.len && /^ {0,3}(`+|~+)[ \t]*$/.test(line)) fence = null;
+      continue;
+    }
+    if (m) { fence = { ch: m[1][0], len: m[1].length }; continue; }
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
+// Inline code (CommonMark): a run of N backticks is closed by the next run of
+// exactly N. A run length that finds no closer never will later either, so
+// each length fails at most once — linear in practice, bounded regardless.
+function stripCodeSpans(text) {
+  let out = '';
+  let i = 0;
+  const failed = new Set();
+  while (i < text.length) {
+    if (text[i] !== '`') { out += text[i++]; continue; }
+    let j = i;
+    while (j < text.length && text[j] === '`') j++;
+    const n = j - i;
+    if (!failed.has(n)) {
+      let k = j;
+      let closed = false;
+      while (k < text.length) {
+        if (text[k] !== '`') { k++; continue; }
+        let m = k;
+        while (m < text.length && text[m] === '`') m++;
+        if (m - k === n) { closed = true; break; }
+        k = m;
+      }
+      if (closed) { i = k + n; continue; }
+      failed.add(n);
+    }
+    out += text.slice(i, j);
+    i = j;
+  }
+  return out;
+}
+
 function stripNonProse(text) {
-  return String(text || '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/(^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2[ \t]*(?=\n|$)/g, '$1')
-    .replace(/`[^`\n]*`/g, '');
+  return stripCodeSpans(stripFencedBlocks(String(text || '').replace(/<!--[\s\S]*?-->/g, '')));
 }
 const stripHtmlComments = stripNonProse; // kept for callers of the old name
 

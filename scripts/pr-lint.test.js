@@ -43,6 +43,9 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('use `Closes #12` in the body'), []);
   assert.deepEqual(numbers('```\nCloses #12\n```\nCloses #13'), [13]);
   assert.deepEqual(numbers('`x` Closes #14 `y`'), [14]);
+  assert.deepEqual(numbers('``Closes #15``'), []);
+  assert.deepEqual(numbers('`` `Closes #16` `` and Closes #17'), [17]);
+  assert.deepEqual(numbers('```Closes #18``` Closes #19'), [19]);
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
