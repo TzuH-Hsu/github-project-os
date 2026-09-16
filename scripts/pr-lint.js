@@ -92,8 +92,33 @@ function stripCodeSpans(text) {
   return out;
 }
 
+// HTML comments: `<!-- … -->` is dropped wherever it is. An unterminated
+// `<!--` that starts a line is an HTML block (CommonMark type 2) and runs to
+// the end of the document; unterminated mid-line it is literal text, which
+// GitHub renders — and links — as prose, so it is kept.
+function stripHtmlCommentsLinear(text) {
+  let out = '';
+  let i = 0;
+  let noCloser = false; // once a search for `-->` fails, every later one would too
+  while (i < text.length) {
+    const open = text.indexOf('<!--', i);
+    if (open === -1) { out += text.slice(i); break; }
+    out += text.slice(i, open);
+    const close = noCloser ? -1 : text.indexOf('-->', open + 4);
+    if (close !== -1) { i = close + 3; continue; }
+    noCloser = true;
+    let k = open;
+    let spaces = 0;
+    while (k > 0 && text[k - 1] === ' ' && spaces < 4) { k--; spaces++; }
+    if (spaces <= 3 && (k === 0 || text[k - 1] === '\n')) break; // block comment to EOF
+    out += '<!--';
+    i = open + 4;
+  }
+  return out;
+}
+
 function stripNonProse(text) {
-  return stripCodeSpans(stripFencedBlocks(String(text || '').replace(/<!--[\s\S]*?-->/g, '')));
+  return stripCodeSpans(stripFencedBlocks(stripHtmlCommentsLinear(String(text || ''))));
 }
 const stripHtmlComments = stripNonProse; // kept for callers of the old name
 

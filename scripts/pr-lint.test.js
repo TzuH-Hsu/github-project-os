@@ -38,6 +38,10 @@ test('the untouched template line still fails: the number is inside an HTML comm
 
 test('a closing keyword inside an HTML comment, a fenced block or inline code does not count', () => {
   assert.deepEqual(numbers('<!-- Closes #12 -->\nsome text'), []);
+  assert.deepEqual(numbers('<!--\nCloses #42'), []); // unterminated block comment runs to EOF
+  assert.deepEqual(numbers('  <!--\nCloses #43'), []);
+  assert.deepEqual(numbers('Closes #<!--\nCloses #44'), [44]); // unterminated mid-line: literal text, GitHub links the next line
+  assert.deepEqual(numbers('<!-- a --> Closes #45 <!-- b -->'), [45]);
   assert.deepEqual(numbers('```\nCloses #12\n```\n'), []);
   assert.deepEqual(numbers('~~~bash\ngit commit -m "Closes #12"\n~~~'), []);
   assert.deepEqual(numbers('use `Closes #12` in the body'), []);
