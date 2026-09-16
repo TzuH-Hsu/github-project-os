@@ -61,6 +61,8 @@ git branch --show-current  # expect <type>/<issue#>-<slug>
 
 ## Pitfalls
 
+- A branch with the issue slot empty (`chore/-slug`) — the convention degrades silently; CI fails the PR on it (`scripts/pr-lint.js`).
+
 - Typing `fix:` for what is actually a `feat:` (or vice versa) — this silently
   miscategorizes the changelog entry; release-please trusts the type literally.
 - Committing straight to `main` "because it's a one-liner" — there is no exception;

@@ -15,16 +15,17 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `.github/labels.yml` | Labels as code; bootstrap re-run = sync; carries the commented-out coarse-Type fallback (ADR-0006) | Edit alongside label changes; `FORM_MANAGED_TYPES` in `scripts/issue-labeler.js` must match (`scripts/check-label-forms.sh` enforces), and the commented block must stay commented |
 | `.github/ISSUE_TEMPLATE/` (3 forms) | Set native types; feed the labeler | Area/Priority/Subtype options must match `labels.yml` — `scripts/check-label-forms.sh` fails `make check` until they do |
 | `.github/PULL_REQUEST_TEMPLATE.md` | Validation ladder + RISK convention at point of use | Near zero |
-| `.github/workflows/ci.yml` | L0 gate; installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` or `runs-on:` | SHA-pin bumps via Dependabot |
+| `.github/workflows/ci.yml` | L0 gate; lints the PR itself (`scripts/pr-lint.js`), installs tools via `make ci-tools`, runs `make ci-pr`. The only required status check — see its header before touching `on:` or `runs-on:` | SHA-pin bumps via Dependabot |
 | `.github/workflows/issue-labeler.yml` | Thin caller: checkout + `require('scripts/issue-labeler.js')` (ADR-0008) | Two action SHA pins via Dependabot; no adopter values |
-| `scripts/issue-labeler.js` (+ `.test.js`) | Form selections → labels (single-home preserving); `area:*` allowlist read from the checked-out `labels.yml` | `ALLOWED_PRIORITIES` / `ALLOWED_SUBTYPES` must match the forms — checked by `scripts/check-label-forms.sh`; behaviour pinned by `scripts/issue-labeler.test.js` via `make check` |
+| `scripts/issue-labeler.js` (+ `.test.js`) | Form selections → labels (single-home preserving); `area:*` allowlist read from the checked-out `labels.yml` | `ALLOWED_PRIORITIES` / `ALLOWED_SUBTYPES` must match the forms — checked by `scripts/check-label-forms.sh`; behaviour pinned by its test via `make check` |
+| `scripts/pr-lint.js` (+ `.test.js`) | Fails the required `ci` check when a PR's branch is not `<type>/<issue#>-<slug>` or its body links no issue; bot branches exempt | `TYPES` must equal the list in `AGENTS.md`'s Branch step — its test asserts it; behaviour pinned via `make check` |
 | `.github/workflows/maintenance.yml` | Weekly drift detectors: external link check + CI tool version check | Near zero |
 | `.github/workflows/release-please.yml` + configs | Human-gated release automation (ADR-0002) | Action SHA bumps; `initial-version` pins adopters' first release and is inert afterwards |
 | `.github/rulesets/main-branch.json` | Importable branch protection (PR + green `ci` required) | Near zero |
 | `LICENSE` | The template's own licence (MIT); bootstrap phase 9 replaces it with the adopter's choice and moves upstream attribution to `NOTICE` | Near zero — the holder line is asserted against `bootstrap.sh`'s constants by `scripts/check-license-marker.sh` |
 | `Makefile` | The only executable contract; adopter customization point | Grows with adopter stack, not with the template |
 | `scripts/bootstrap.sh` | Applies everything a template can't ship as files; idempotent sync | Highest-cost component — E2E-verified each release (below) |
-| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker, label values repeated in forms and the labeler, the labeler's own tests | Near zero |
+| `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker, label values repeated in forms and the labeler, the `scripts/*.test.js` suites | Near zero |
 | `scripts/install-ci-tools.sh` | Checksum-verified CI tool installs; single home for all five tool version pins, shared by `ci.yml` and `maintenance.yml` via `make ci-tools`; bounds `RUNNER_LABELS` to linux x86_64 | Hand-bump a pin when the drift check flags it |
 | `scripts/check-tool-versions.sh` | Diffs those pins against upstream weekly and fails on drift — Dependabot cannot see them, so nothing else would | Near zero; add a row when a tool is added |
 | `docs/adr/` | Decision records; the "why" layer | Grows slowly by trigger criteria |

@@ -4,7 +4,7 @@ name: Issue labeler
 # form fields on open/edit. The logic lives in scripts/issue-labeler.js
 # (ADR-0008); this file only checks out the default branch and calls it, so
 # it carries no adopter values and can be replaced whole on upgrade. The
-# script is tested by `make check` (scripts/check-issue-labeler.sh).
+# script is tested by `make check` (scripts/check-node-tests.sh).
 #
 # The issue body is untrusted input — it is only ever read inside the
 # actions/github-script JS sandbox (context.payload.issue.body), never
