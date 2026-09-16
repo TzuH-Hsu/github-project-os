@@ -152,9 +152,12 @@ test('run: an empty area set warns and applies nothing for Area', async () => {
   assert.equal(warnings.length, 1);
 });
 
-test("this repository's labels.yml: the shipped starter set behaves as before", () => {
+test("this repository's labels.yml: a declared area is applied, an undeclared one is not", () => {
+  // Must hold in any adopted repo, whatever the area names are — the
+  // template tells adopters to rename the starter set, so no name is assumed.
   const areas = labeler.readAllowedAreas(path.join(__dirname, '..'));
-  assert.ok(areas.includes('area:ci'));
-  const r = changes('### Area\n\n- [x] area:ci — CI workflows and automation\n- [x] area:nope — n', [], areas);
-  assert.deepEqual(r.toAdd, ['area:ci']);
+  if (areas.length === 0) return; // an adopter may have dropped the family entirely
+  const first = areas[0];
+  const r = changes(`### Area\n\n- [x] ${first} — declared\n- [x] area:not-declared-anywhere — n`, [], areas);
+  assert.deepEqual(r.toAdd, [first]);
 });
