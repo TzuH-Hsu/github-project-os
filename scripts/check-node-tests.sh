@@ -20,8 +20,9 @@ cd "$(dirname "$0")/.."
 command -v node >/dev/null 2>&1 || { echo "install: node (e.g. brew install node) — needed for scripts/*.test.js"; exit 1; }
 
 # Every `require(... /scripts/<name>.js)` in a workflow must name a file that
-# is here — an adopter who takes a thin-caller workflow without its script
-# gets a job that fails on every event while `make check` stays green.
+# is here, with its sibling test — an adopter who takes a thin-caller workflow
+# without its script gets a job that fails on every event while `make check`
+# stays green, and a handler without a test is outside ADR-0008.
 missing=0
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$wf" ] || continue
@@ -30,8 +31,12 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
     if [ ! -f "$js" ]; then
       echo "FAIL: $wf requires $js, which is missing — take the workflow and the script together (docs/template/upgrading.md)"
       missing=$((missing + 1))
+    elif [ ! -f "${js%.js}.test.js" ]; then
+      # ADR-0008: a handler a workflow calls is tested, no exceptions
+      echo "FAIL: $wf requires $js, which has no ${js%.js}.test.js — every workflow handler ships with its test (ADR-0008)"
+      missing=$((missing + 1))
     else
-      echo "OK: $wf requires $js (present)"
+      echo "OK: $wf requires $js (present, tested by ${js%.js}.test.js)"
     fi
   done <<EOF_JS
 $(grep -oE 'scripts/[A-Za-z0-9._-]+\.js' "$wf" | sort -u)
