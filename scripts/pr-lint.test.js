@@ -62,11 +62,14 @@ test('a Refs-only body is told to split the work into a sub-issue', () => {
   assert.match(r.problems[0], /sub-issue it can close/);
 });
 
-test('branch issue must be among the linked issues; several linked issues are fine', () => {
-  assert.deepEqual(lint({ headRef: 'feat/10-x', body: 'Closes #10\nCloses #11' }).problems, []);
+test('exactly one local issue: a second Closes fails (one issue per PR), a mismatched one fails', () => {
+  const two = lint({ headRef: 'feat/10-x', body: 'Closes #10\nCloses #11' });
+  assert.equal(two.problems.length, 1);
+  assert.match(two.problems[0], /one issue per PR/);
   const r = lint({ headRef: 'feat/10-x', body: 'Closes #11' });
   assert.equal(r.problems.length, 1);
   assert.match(r.problems[0], /branch names issue #10 but the body closes #11/);
+  assert.deepEqual(lint({ headRef: 'feat/10-x', body: 'Closes #10\nCloses #10' }).problems, []); // same issue twice is one issue
 });
 
 test('branch grammar: every CONTRIBUTING type, lowercase slug with dots/underscores; rejects others', () => {

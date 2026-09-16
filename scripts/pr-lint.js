@@ -10,7 +10,7 @@
 // carries, which were being broken silently:
 //   1. the head branch is `<type>/<issue#>-<slug>`;
 //   2. the body links an issue with a GitHub closing keyword (`Closes #N`);
-//   3. the branch's issue number is among the linked ones.
+//   3. exactly one issue in this repository is closed, and it is the branch's.
 // Bot PRs (release-please, Dependabot) have no issue and are exempt — by WHO
 // opened them, never by branch name: on a public repository a fork author
 // picks the head branch name, so `release-please--…` proves nothing.
@@ -92,9 +92,14 @@ function lint({ headRef, body, repo, author, labels }) {
         `with the number. Any GitHub closing keyword works: Closes / Fixes / Resolves, optional colon, #N or a full issue URL${tail}`,
     );
   }
-  if (branchIssue !== null && linked.length > 0 && !linked.includes(branchIssue)) {
+  if (linked.length > 1) {
     problems.push(
-      `branch names issue #${branchIssue} but the body closes #${linked.join(', #')} — one of them is wrong`,
+      `body closes #${linked.join(', #')} — one issue per PR (skills/pr-authoring rule 5): keep the one this branch is for, ` +
+        'and close a genuine duplicate by hand after merge',
+    );
+  } else if (branchIssue !== null && linked.length === 1 && linked[0] !== branchIssue) {
+    problems.push(
+      `branch names issue #${branchIssue} but the body closes #${linked[0]} — one of them is wrong`,
     );
   }
   return { exempt: false, why: null, problems, branchIssue, linked, cross };
