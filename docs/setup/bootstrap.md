@@ -317,7 +317,10 @@ One-time conversion from the template product to your project:
 
 - `docs/template/README.starter.md` becomes `README.md`
 - `docs/template/` is removed
-- `CHANGELOG.md` resets to its 8-line seed
+- `CHANGELOG.md` is emptied — release-please writes the whole file from the
+  first release on. (A seeded file is worse than empty: release-please appends
+  the seed below the first release section with its headings demoted, and it
+  stays there for the life of the repository.)
 - `.release-please-manifest.json` is verified/rewritten to `{".": "0.0.0"}`
 
 Guard: before touching anything, the script requires `README.md`,
@@ -331,16 +334,7 @@ Manual:
 ```bash
 mv docs/template/README.starter.md README.md
 rm -rf docs/template
-cat > CHANGELOG.md <<'EOF'
-# Changelog
-
-All notable changes are recorded here by release-please (Conventional Commits
-drive the entries — see docs/adr/ADR-0002-release-flow.md).
-
-## Unreleased
-
-No entries yet.
-EOF
+: > CHANGELOG.md
 echo '{".": "0.0.0"}' > .release-please-manifest.json
 ```
 

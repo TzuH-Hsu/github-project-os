@@ -59,12 +59,3 @@
 ### Bug Fixes
 
 * bootstrap autorelease prune exclusion, gh api 404 detection, personal-account type docs ([0f912c0](https://github.com/TzuH-Hsu/github-project-os/commit/0f912c0c5ebb0a6bb7aa39aa6c185f4f0bc640ed))
-
-## Changelog
-
-All notable changes are recorded here by release-please (Conventional Commits
-drive the entries — see docs/adr/ADR-0002-release-flow.md).
-
-## Unreleased
-
-No entries yet.

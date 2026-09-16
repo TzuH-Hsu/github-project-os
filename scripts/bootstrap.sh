@@ -1400,16 +1400,6 @@ phase_license() {
 
 # --- Phase 10 — De-template ---
 
-CHANGELOG_SEED='# Changelog
-
-All notable changes are recorded here by release-please (Conventional Commits
-drive the entries — see docs/adr/ADR-0002-release-flow.md).
-
-## Unreleased
-
-No entries yet.
-'
-
 phase_detemplate() {
   if [ "$KEEP_TEMPLATE_DOCS" -eq 1 ]; then
     skip "Phase 10: de-template (--keep-template-docs)"
@@ -1446,7 +1436,7 @@ phase_detemplate() {
 This converts this repo from the template product to YOUR project:
   - docs/template/README.starter.md becomes README.md
   - docs/template/ is removed
-  - CHANGELOG.md is reset to its 8-line seed
+  - CHANGELOG.md is emptied (release-please writes the whole file)
 EOF
     if ! confirm "Proceed with de-templating?" "y"; then
       do_detemplate=0
@@ -1500,13 +1490,23 @@ EOF
     || { fail "rm -rf docs/template failed"; record_phase "10. De-template" "fail"; return 1; }
   ok "docs/template/ removed"
 
-  if [ "$DRY_RUN" -eq 1 ]; then
-    printf '%s[dry-run]%s would reset CHANGELOG.md to its 8-line seed\n' "$C_YELLOW" "$C_RESET"
+  # release-please owns CHANGELOG.md, and its updater treats a file with no
+  # version heading as "no entries yet": it writes the header and the first
+  # release section, then APPENDS the old content with every heading demoted.
+  # Any seed text therefore becomes a permanent tail below every release
+  # ("## Unreleased / No entries yet." at the bottom of the file, forever).
+  # Only an empty file yields a clean first section, so the file is emptied.
+  if [ -f CHANGELOG.md ] && [ ! -s CHANGELOG.md ]; then
+    ok "CHANGELOG.md already empty (release-please writes the whole file)"
   else
-    printf '%s' "$CHANGELOG_SEED" > CHANGELOG.md \
-      || { fail "writing CHANGELOG.md failed"; record_phase "10. De-template" "fail"; return 1; }
+    if [ "$DRY_RUN" -eq 1 ]; then
+      printf '%s[dry-run]%s would empty CHANGELOG.md (release-please writes the whole file)\n' "$C_YELLOW" "$C_RESET"
+    else
+      : > CHANGELOG.md \
+        || { fail "emptying CHANGELOG.md failed"; record_phase "10. De-template" "fail"; return 1; }
+    fi
+    ok "CHANGELOG.md emptied (release-please writes the whole file)"
   fi
-  ok "CHANGELOG.md reset to seed"
 
   local manifest='.release-please-manifest.json'
   local want='{".":"0.0.0"}'
