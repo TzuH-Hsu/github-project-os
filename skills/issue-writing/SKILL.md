@@ -73,9 +73,10 @@ resolves them against its allowlists. `### Subtype` exists only on the Task form
 
 The native issue type is separate. On an **organization** repository add
 `--type Task` (or `--type Bug` / `--type Feature`, matching the form you are imitating) — that is what the form would have set. On a **personal**
-account leave it out: `gh` refuses with `type "Task" not found; available types:`
-(GitHub reports none there — see `.github/PROJECT_FIELDS.md`, "When native issue
-types are unavailable"). There the default is no coarse Type at all; only if the
+account leave it out: `gh` **creates the issue, then fails** to set the type and
+exits 1 with `type "Task" not found; available types:` and no URL (GitHub reports
+no types there — see `.github/PROJECT_FIELDS.md`, "When native issue types are
+unavailable"), so a script that retries on failure opens duplicates. There the default is no coarse Type at all; only if the
 adopter has uncommented the `type:bug` / `type:feature` block in `labels.yml` and
 re-run bootstrap do you apply one of those by hand — the one label family the
 labeler leaves alone.
