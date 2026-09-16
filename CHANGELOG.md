@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.0...v0.5.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* the labeler test no longer assumes area:ci exists in the repository's labels.yml ([#67](https://github.com/TzuH-Hsu/github-project-os/issues/67)) ([eafbfd6](https://github.com/TzuH-Hsu/github-project-os/commit/eafbfd60a9ac3fa9b15d1ac8834d34d61f5b6608))
+
 ## [0.5.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.4.1...v0.5.0) (2026-09-16)
 
 
