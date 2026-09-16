@@ -39,23 +39,39 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // fenced code blocks or inline code spans. Strip those before matching so the
 // check agrees with what GitHub will actually close. Linear scanners, not
 // lazy regexes — the body is attacker-controlled and up to 65,536 chars.
+//
+// Order matters (CommonMark): block constructs first, line by line, whichever
+// opens first wins — a `<!--` inside a fence is code, a ``` inside an HTML
+// comment block is comment; then inline code spans; then inline comments,
+// because a backtick to the left of `<!--` makes the comment marker code.
 
-// Fenced blocks (CommonMark): a line starting with 3+ backticks or tildes
-// opens; a line with the same character and at least that many closes; an
-// unclosed fence runs to the end of the document.
-function stripFencedBlocks(text) {
+// Block pass. A fence line (3+ backticks or tildes, ≤3 spaces indent) opens a
+// fence closed by a line of the same character at least that long; unclosed,
+// it runs to EOF. A line-start `<!--` opens an HTML block (type 2) that ends
+// on the line containing `-->` (that whole line included); unclosed, EOF.
+function stripBlocks(text) {
   const kept = [];
   let fence = null; // { ch, len }
+  let comment = false;
   for (const line of text.split('\n')) {
-    let m = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    // a backtick fence's info string may not contain a backtick — such a line
-    // is inline code, not a fence
-    if (m && m[1][0] === '`' && m[2].includes('`')) m = null;
     if (fence) {
-      if (m && m[1][0] === fence.ch && m[1].length >= fence.len && /^ {0,3}(`+|~+)[ \t]*$/.test(line)) fence = null;
+      const c = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (c && c[1][0] === fence.ch && c[1].length >= fence.len) fence = null;
       continue;
     }
-    if (m) { fence = { ch: m[1][0], len: m[1].length }; continue; }
+    if (comment) {
+      if (line.includes('-->')) comment = false;
+      continue;
+    }
+    let f = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    // a backtick fence's info string may not contain a backtick — such a line
+    // is inline code, not a fence
+    if (f && f[1][0] === '`' && f[2].includes('`')) f = null;
+    if (f) { fence = { ch: f[1][0], len: f[1].length }; continue; }
+    if (/^ {0,3}<!--/.test(line)) {
+      if (!line.slice(line.indexOf('<!--') + 4).includes('-->')) comment = true;
+      continue;
+    }
     kept.push(line);
   }
   return kept.join('\n');
@@ -92,11 +108,10 @@ function stripCodeSpans(text) {
   return out;
 }
 
-// HTML comments: `<!-- … -->` is dropped wherever it is. An unterminated
-// `<!--` that starts a line is an HTML block (CommonMark type 2) and runs to
-// the end of the document; unterminated mid-line it is literal text, which
+// Inline HTML comments (block ones are gone by now): `<!-- … -->` is dropped,
+// across lines if need be; an unterminated `<!--` is literal text, which
 // GitHub renders — and links — as prose, so it is kept.
-function stripHtmlCommentsLinear(text) {
+function stripInlineComments(text) {
   let out = '';
   let i = 0;
   let noCloser = false; // once a search for `-->` fails, every later one would too
@@ -107,10 +122,6 @@ function stripHtmlCommentsLinear(text) {
     const close = noCloser ? -1 : text.indexOf('-->', open + 4);
     if (close !== -1) { i = close + 3; continue; }
     noCloser = true;
-    let k = open;
-    let spaces = 0;
-    while (k > 0 && text[k - 1] === ' ' && spaces < 4) { k--; spaces++; }
-    if (spaces <= 3 && (k === 0 || text[k - 1] === '\n')) break; // block comment to EOF
     out += '<!--';
     i = open + 4;
   }
@@ -118,7 +129,7 @@ function stripHtmlCommentsLinear(text) {
 }
 
 function stripNonProse(text) {
-  return stripCodeSpans(stripFencedBlocks(stripHtmlCommentsLinear(String(text || ''))));
+  return stripInlineComments(stripCodeSpans(stripBlocks(String(text || ''))));
 }
 const stripHtmlComments = stripNonProse; // kept for callers of the old name
 
@@ -242,4 +253,4 @@ async function run({ github, context, core }) {
   return result;
 }
 
-module.exports = { run, lint, verifyIssue, isExempt, linkedIssues, describe, stripNonProse, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };
+module.exports = { run, lint, verifyIssue, isExempt, linkedIssues, describe, stripNonProse, stripBlocks, stripCodeSpans, stripInlineComments, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };

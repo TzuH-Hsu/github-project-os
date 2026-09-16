@@ -41,7 +41,14 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('<!--\nCloses #42'), []); // unterminated block comment runs to EOF
   assert.deepEqual(numbers('  <!--\nCloses #43'), []);
   assert.deepEqual(numbers('Closes #<!--\nCloses #44'), [44]); // unterminated mid-line: literal text, GitHub links the next line
-  assert.deepEqual(numbers('<!-- a --> Closes #45 <!-- b -->'), [45]);
+  assert.deepEqual(numbers('<!-- a --> Closes #45 <!-- b -->'), []); // line-start <!-- makes the WHOLE line an HTML block (CommonMark type 2), even past -->
+  assert.deepEqual(numbers('x <!-- a --> Closes #45 <!-- b -->'), [45]); // mid-line comments are inline; the prose between them counts
+  // nesting: whichever block opens first wins
+  assert.deepEqual(numbers('```\n<!--\n```\nCloses #46'), [46]); // `<!--` inside a fence is code
+  assert.deepEqual(numbers('<!--\n```\n-->\nCloses #47'), [47]); // ``` inside a comment block is comment
+  assert.deepEqual(numbers('<!--\n```\nCloses #48'), []); // unclosed comment block swallows the fence line too
+  assert.deepEqual(numbers('`<!--` Closes #49 `-->`'), [49]); // leftmost construct wins: the backtick makes <!-- code
+  assert.deepEqual(numbers('text <!--\nCloses #50\n--> Closes #51'), [51]); // inline comment across lines
   assert.deepEqual(numbers('```\nCloses #12\n```\n'), []);
   assert.deepEqual(numbers('~~~bash\ngit commit -m "Closes #12"\n~~~'), []);
   assert.deepEqual(numbers('use `Closes #12` in the body'), []);
