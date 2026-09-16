@@ -70,11 +70,13 @@ gh issue create --repo <owner>/<repo> --title "Task: …" --body "$(printf '%s\n
 The headings are the forms' `label:` values (`Priority`, `Area`, `Subtype` — pinned by
 `scripts/check-label-forms.sh`); the option lines are the forms' own, so the labeler
 resolves them against its allowlists. `### Subtype` exists only on the Task form.
-What this cannot do is set the native issue type: on an organization repository
-`POST /repos/{owner}/{repo}/issues` accepts a `type` field; on a personal account
-nothing can (see `.github/PROJECT_FIELDS.md`, "When native issue types are
-unavailable"), and the hand-applied `type:bug` / `type:feature` fallback is the one
-label family the labeler leaves alone.
+
+The native issue type is separate. On an **organization** repository add
+`--type Bug|Feature|Task` — that is what the form would have set. On a **personal**
+account leave it out: `gh` refuses with `type "Task" not found; available types:`
+(GitHub reports none there — see `.github/PROJECT_FIELDS.md`, "When native issue
+types are unavailable"), and the coarse Type is instead the hand-applied
+`type:bug` / `type:feature` fallback, the one label family the labeler leaves alone.
 
 Good acceptance criteria read like a test plan:
 
