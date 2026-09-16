@@ -16,9 +16,14 @@ safe to hand to an AI agent without a live conversation.
 
 1. Always use an issue form (Bug / Feature / Task) — never open a blank issue. The
    form you pick sets the native GitHub issue type; that type is authoritative.
+   Without a terminal (an agent, a script), you cannot fill the form — so write the
+   body in the shape the form would have rendered (see "Without a terminal" below).
+   The labeler reads that shape, not the form itself.
 2. Never hand-add a label the form already captures. Priority (`priority:*`) and area
    (`area:*`) come from the form's own fields — duplicating them manually creates a
-   second, driftable copy of the same fact.
+   second, driftable copy of the same fact. It also does not stick: the labeler owns
+   those families and removes any `priority:*` / `area:*` it cannot derive from the
+   body's `### Priority` / `### Area` sections on the next edit.
 3. Respect the single-home contract in `.github/PROJECT_FIELDS.md` for every other
    attribute too: status lives on the Project board, version on the milestone,
    dependencies and epics as native relationships. Don't invent a label or field that
@@ -43,12 +48,42 @@ gh issue create --repo <owner>/<repo>
 gh issue view 42 --repo <owner>/<repo> --json title,labels,milestone,body
 ```
 
+### Without a terminal
+
+`gh issue create --title … --body …` skips the form entirely: no native type, and a
+body with none of the form's sections, so the labeler has nothing to sync and the
+issue ends up with no labels at all. Compose the body the way the form would have
+rendered it — a `### <Field label>` heading per field, the option text exactly as
+the form lists it — and the labeler applies `priority:*` / `area:*` / `type:*` on
+the `opened` event:
+
+```bash
+gh issue create --repo <owner>/<repo> --title "Task: …" --body "$(printf '%s\n' \
+  '### Summary' '' 'One line.' '' \
+  '### Subtype' '' 'docs — Documentation' '' \
+  '### Context' '' 'Enough for a reader with no prior conversation.' '' \
+  '### Acceptance criteria' '' '- [ ] `make verify` passes' '' \
+  '### Priority' '' 'p2 — Important, scheduled' '' \
+  '### Area' '' '- [x] area:docs — Documentation and guides' '- [ ] area:ci — CI workflows and automation')"
+```
+
+The headings are the forms' `label:` values (`Priority`, `Area`, `Subtype` — pinned by
+`scripts/check-label-forms.sh`); the option lines are the forms' own, so the labeler
+resolves them against its allowlists. `### Subtype` exists only on the Task form.
+What this cannot do is set the native issue type: on an organization repository
+`POST /repos/{owner}/{repo}/issues` accepts a `type` field; on a personal account
+nothing can (see `.github/PROJECT_FIELDS.md`, "When native issue types are
+unavailable"), and the hand-applied `type:bug` / `type:feature` fallback is the one
+label family the labeler leaves alone.
+
 Good acceptance criteria read like a test plan:
 
 ```markdown
 - [ ] `make verify` passes on a fresh clone
 - [ ] `gh issue create` via the Feature form produces a native `Feature` type issue
 - [ ] No `type:*`, `priority:*`, or `area:*` label is missing after form submission
+- [ ] An issue opened with `--body` in the form's shape carries `priority:*` and
+      `area:*` after the labeler run
 ```
 
 Bad acceptance criteria ("works correctly", "improve performance") give an agent or a
@@ -66,6 +101,9 @@ reviewer nothing to check against — rewrite before handing the issue to anyone
   and blocked-by links — invisible to automation and easy to let go stale.
 - Opening a blank issue to "save time" — it skips native type assignment and the
   priority/area fields entirely, pushing the cleanup onto triage later.
+- An agent opening issues with `--body` prose and no `### Priority` / `### Area`
+  sections — every such issue is label-less, and adding the labels by hand only lasts
+  until the next edit. Use the form-shaped body above.
 
 ## Related
 
