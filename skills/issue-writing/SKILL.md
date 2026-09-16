@@ -16,9 +16,9 @@ safe to hand to an AI agent without a live conversation.
 
 1. Always use an issue form (Bug / Feature / Task) — never open a blank issue. The
    form you pick sets the native GitHub issue type; that type is authoritative.
-   Without a terminal (an agent, a script), you cannot fill the form — so write the
-   body in the shape the form would have rendered (see "Without a terminal" below).
-   The labeler reads that shape, not the form itself.
+   Non-interactively (an agent, a script — anything that cannot answer the form's
+   prompts), write the body in the shape the form would have rendered (see
+   "Non-interactive: no form" below). The labeler reads that shape, not the form.
 2. Never hand-add a label the form already captures. Priority (`priority:*`) and area
    (`area:*`) come from the form's own fields — duplicating them manually creates a
    second, driftable copy of the same fact. It also does not stick: the labeler owns
@@ -48,7 +48,7 @@ gh issue create --repo <owner>/<repo>
 gh issue view 42 --repo <owner>/<repo> --json title,labels,milestone,body
 ```
 
-### Without a terminal
+### Non-interactive: no form
 
 `gh issue create --title … --body …` skips the form entirely: no native type, and a
 body with none of the form's sections, so the labeler has nothing to sync and the
@@ -75,8 +75,10 @@ The native issue type is separate. On an **organization** repository add
 `--type Bug|Feature|Task` — that is what the form would have set. On a **personal**
 account leave it out: `gh` refuses with `type "Task" not found; available types:`
 (GitHub reports none there — see `.github/PROJECT_FIELDS.md`, "When native issue
-types are unavailable"), and the coarse Type is instead the hand-applied
-`type:bug` / `type:feature` fallback, the one label family the labeler leaves alone.
+types are unavailable"). There the default is no coarse Type at all; only if the
+adopter has uncommented the `type:bug` / `type:feature` block in `labels.yml` and
+re-run bootstrap do you apply one of those by hand — the one label family the
+labeler leaves alone.
 
 Good acceptance criteria read like a test plan:
 
