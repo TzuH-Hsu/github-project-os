@@ -8,7 +8,7 @@ These principles decided every file in this repository. When proposing a change 
 2. **GitHub-native before third-party.** Native issue types, native sub-issues, native rulesets, Projects v2. A third-party tool must clear a high bar: solve something GitHub genuinely cannot.
 3. **Every file justifies its maintenance cost.** If a file stops earning its keep, it gets deleted. The [architecture ledger](architecture.md) records what each piece is for.
 4. **One home per fact.** Metadata (ADR-0003), documentation (`skills/docs-hygiene/`), configuration — duplicate homes always drift.
-5. **Logic in the Makefile, not workflows.** Adopters customize `make` targets; workflow YAML stays untouched and upgradable.
+5. **Logic in the Makefile, not workflows.** Adopters customize `make` targets; workflow YAML stays untouched and upgradable. The one shape the Makefile cannot hold — an event handler that needs the token and the payload — lives in `scripts/` behind a two-line caller (ADR-0008), which keeps the YAML just as untouched.
 6. **The template obeys its own rules.** Its CI is the CI it ships; its issues use its own forms; its releases use its own flow. Dogfooding is the drift detector.
 7. **AI agents are first-class, humans stay in control.** Agents share the same issue, PR, and validation contract as humans and load the same skills; humans decide what agents work on and gate merges, releases, and destructive operations.
 8. **Ratchets over cleanup.** Label budgets, workflow-count budgets, handoff caps — prevention mechanisms, because every failure mode this template guards against is cheap to prevent and expensive to undo (see `skills/anti-patterns/`).

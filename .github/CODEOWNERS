@@ -23,6 +23,7 @@
 
 # Example: Require infrastructure ownership
 # /scripts/bootstrap.sh                    @infra-owner
+# /scripts/issue-labeler.js                @infra-owner
 
 # Example: Solo dev auto-request
 # *                                        @your-username

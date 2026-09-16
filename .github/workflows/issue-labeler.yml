@@ -1,18 +1,21 @@
 name: Issue labeler
 
-# Syncs priority:*, area:* and the four type:* SUBTYPE labels from
-# the issue form fields on open/edit. The issue body is untrusted input — it is
-# only ever read inside the actions/github-script JS sandbox
-# (context.payload.issue.body), never interpolated into a shell `run:` step.
+# Syncs priority:*, area:* and the four type:* SUBTYPE labels from the issue
+# form fields on open/edit. The logic lives in scripts/issue-labeler.js
+# (ADR-0008); this file only checks out the default branch and calls it, so
+# it carries no adopter values and can be replaced whole on upgrade. The
+# script is tested by `make check` (scripts/check-issue-labeler.sh).
 #
-# "the four type:* subtype labels", not "type:*": the type: namespace also
-# carries labels no form produces, so this workflow owns an exact list rather
-# than a prefix. See FORM_MANAGED_TYPES below.
+# The issue body is untrusted input — it is only ever read inside the
+# actions/github-script JS sandbox (context.payload.issue.body), never
+# interpolated into a shell `run:` step, and every label the script adds is
+# validated against an allowlist the body cannot influence.
 #
-# area:* is the family adopters are told to rename, so its allowlist is not
-# written here: it is read from .github/labels.yml on the default branch at
-# run time (see loadAllowedAreas below). This file carries no adopter values
-# and can be replaced whole on upgrade.
+# Why a checkout on an issue event: the script and .github/labels.yml (the
+# run-time source of the area:* allowlist) live in the repository. On `issues`
+# events GITHUB_SHA is the head of the default branch, so this checks out
+# exactly the code and label declarations that were merged — never a PR
+# branch's copy.
 
 on:
   issues:
@@ -34,203 +37,17 @@ jobs:
     timeout-minutes: 5
     permissions:
       issues: write
-      contents: read # getContent on .github/labels.yml
+      contents: read # checkout of the default branch
     steps:
+      - name: Check out the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
       - name: Sync form-managed labels
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            // Parses the GitHub issue-form markdown body (### <Label> headings)
-            // and syncs the form-managed labels to match. Only ever touches
-            // priority:*, area:* and the four type:* subtypes listed
-            // in FORM_MANAGED_TYPES — every other label on the issue is left
-            // alone, including any type:* label OUTSIDE that list (a coarse
-            // type:bug/type:feature, or an adopter's own). The four form-owned
-            // subtypes are still removed when the form no longer selects them;
-            // that is the point of the sync.
-            const body = context.payload.issue.body || '';
-
-            // Split the body into sections keyed by "### <Heading>".
-            function parseSections(text) {
-              const lines = text.split(/\r?\n/);
-              const sections = {};
-              let current = null;
-              for (const line of lines) {
-                const heading = line.match(/^###\s+(.+?)\s*$/);
-                if (heading) {
-                  current = heading[1].trim();
-                  sections[current] = [];
-                  continue;
-                }
-                if (current) {
-                  sections[current].push(line);
-                }
-              }
-              return sections;
-            }
-
-            const sections = parseSections(body);
-
-            function sectionText(name) {
-              const raw = sections[name];
-              if (!raw) return '';
-              return raw.join('\n').trim();
-            }
-
-            // Dropdown answers render as a plain text line under the heading.
-            // Missing/optional answers render as "_No response_".
-            function dropdownPrefix(name) {
-              const text = sectionText(name);
-              if (!text || text === '_No response_') return null;
-              const firstLine = text.split(/\r?\n/)[0].trim().toLowerCase();
-              return firstLine;
-            }
-
-            // Allowlists — the issue body is untrusted input, so every label
-            // this script adds must be validated against a list the body cannot
-            // influence, never derived from body text alone (addLabels
-            // auto-creates unknown labels, so an unconstrained regex match
-            // would let a crafted body mint arbitrary labels). Priorities and
-            // subtypes are fixed constants; area:* is read from labels.yml
-            // (below), which only a merged PR can change.
-            const ALLOWED_PRIORITIES = ['p0', 'p1', 'p2', 'p3'];
-            // Deliberately NOT read from labels.yml: a repo running the
-            // coarse-Type label fallback (ADR-0006) declares type:bug and
-            // type:feature there, and a crafted "### Subtype" line must not be
-            // able to mint a coarse Type on a Task. scripts/check-label-forms.sh
-            // keeps this list and task.yml's dropdown equal.
-            const ALLOWED_SUBTYPES = ['chore', 'ops', 'docs', 'security'];
-            // The exact type:* labels this workflow owns. Deliberately NOT
-            // `label.startsWith('type:')`: only task.yml has a Subtype dropdown,
-            // so on a bug report or feature request `desired` never holds a
-            // type:* label — and a prefix match would put every hand-applied
-            // type:* label into `toRemove` and strip it on the next body edit.
-            const FORM_MANAGED_TYPES = ALLOWED_SUBTYPES.map((s) => `type:${s}`);
-
-            // area:* allowlist = every `- name: area:...` entry in
-            // .github/labels.yml on the DEFAULT branch. The default branch, not
-            // the event ref, so a PR branch's copy cannot widen the list. The
-            // parse mirrors parse_labels_yml in scripts/bootstrap.sh: an entry
-            // is a `- name:` line, and a commented-out entry starts with # and
-            // never matches. A read failure THROWS — an empty allowlist is not
-            // a safe default, because `desired` would then hold no area:* and
-            // every area label already on the issue would land in toRemove.
-            async function loadAllowedAreas() {
-              const ref = context.payload.repository.default_branch;
-              const { data } = await github.rest.repos.getContent({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                path: '.github/labels.yml',
-                ref,
-              });
-              if (!data || data.type !== 'file' || typeof data.content !== 'string') {
-                throw new Error(`.github/labels.yml is not a readable file on ${ref}`);
-              }
-              const yml = Buffer.from(data.content, 'base64').toString('utf8');
-              const areas = [];
-              for (const line of yml.split(/\r?\n/)) {
-                // Same reading as parse_labels_yml: the name is everything after
-                // `name:` with surrounding whitespace trimmed — no quote or
-                // comment stripping, so area:c# and area:team's survive intact
-                // and a quoted or inline-commented entry is wrong here exactly
-                // as it is wrong for bootstrap (labels.yml's header rules both out).
-                const m = line.match(/^\s*-\s*name:\s*(area:\S.*?)\s*$/);
-                if (m) areas.push(m[1]);
-              }
-              if (areas.length === 0) {
-                core.warning(`no area:* entries in .github/labels.yml on ${ref} — Area checkboxes will apply nothing`);
-              }
-              return areas;
-            }
-            const ALLOWED_AREAS = await loadAllowedAreas();
-
-            const desired = new Set();
-
-            // Option text is "<value> — <description>". Rather than guessing
-            // where the value ends, match the text against the allowed values:
-            // the longest allowed value the text starts with, followed by the
-            // end of the text or a dash (—, – or -) with whitespace on both
-            // sides. A value may therefore contain spaces or a spaced dash, as
-            // GitHub label names can; the allowlist alone decides, and there
-            // is no second regex spelling out the same values
-            // (scripts/check-label-forms.sh keeps the forms and labels.yml on
-            // this convention).
-            function matchAllowed(text, allowed) {
-              const candidates = [...allowed].sort((a, b) => b.length - a.length);
-              for (const name of candidates) {
-                if (text === name) return name;
-                if (text.startsWith(name) && /^\s+[—–-]\s+/.test(text.slice(name.length))) return name;
-              }
-              return null;
-            }
-
-            // ### Priority -> priority:pX (dropdown, e.g. "p0 — Critical, drop everything")
-            const priorityLine = dropdownPrefix('Priority');
-            if (priorityLine) {
-              const value = matchAllowed(priorityLine, ALLOWED_PRIORITIES);
-              if (value) desired.add(`priority:${value}`);
-            }
-
-            // ### Subtype -> type:X (task form only; dropdown, e.g. "chore — Maintenance")
-            const subtypeLine = dropdownPrefix('Subtype');
-            if (subtypeLine) {
-              const value = matchAllowed(subtypeLine, ALLOWED_SUBTYPES);
-              if (value) desired.add(`type:${value}`);
-            }
-
-            // ### Area -> area:* (checkboxes, e.g. "- [x] area:docs — Documentation and guides")
-            const areaText = sectionText('Area');
-            if (areaText) {
-              const checkedLines = areaText.split(/\r?\n/).filter((line) => /^-\s*\[[xX]\]/.test(line));
-              for (const line of checkedLines) {
-                // "- [x] area:<name> — <description>": same rule as the
-                // dropdowns; the allowlist decides, not a character class.
-                const value = matchAllowed(line.replace(/^-\s*\[[xX]\]\s*/, '').trim(), ALLOWED_AREAS);
-                if (value) desired.add(value);
-              }
-            }
-
-            // Only these labels are form-managed; every other label is left
-            // untouched. area: stays a prefix match on purpose — that is what
-            // cleans up a stale area:old label after an adopter renames their
-            // area taxonomy in .github/labels.yml.
-            function isFormManaged(label) {
-              return (
-                label.startsWith('priority:') ||
-                FORM_MANAGED_TYPES.includes(label) ||
-                label.startsWith('area:')
-              );
-            }
-
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.issue.number;
-
-            const currentLabels = (context.payload.issue.labels || []).map((l) => l.name);
-            const currentManaged = currentLabels.filter(isFormManaged);
-
-            const toAdd = [...desired].filter((label) => !currentLabels.includes(label));
-            // On 'edited', drop previously form-managed labels the user un-selected.
-            // On 'opened' this is a no-op (nothing managed exists yet).
-            const toRemove = currentManaged.filter((label) => !desired.has(label));
-
-            if (toAdd.length > 0) {
-              await github.rest.issues.addLabels({
-                owner,
-                repo,
-                issue_number,
-                labels: toAdd,
-              });
-            }
-
-            for (const label of toRemove) {
-              await github.rest.issues.removeLabel({
-                owner,
-                repo,
-                issue_number,
-                name: label,
-              });
-            }
-
-            core.info(`Desired: ${[...desired].join(', ') || '(none)'}`);
-            core.info(`Added: ${toAdd.join(', ') || '(none)'}`);
-            core.info(`Removed: ${toRemove.join(', ') || '(none)'}`);
+            const { run } = require(`${process.env.GITHUB_WORKSPACE}/scripts/issue-labeler.js`);
+            await run({ github, context, core });
