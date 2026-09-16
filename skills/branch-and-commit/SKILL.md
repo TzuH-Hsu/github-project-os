@@ -25,11 +25,17 @@ code that closes it. Getting the format right keeps `git log`, the changelog, an
    | `feat` | New capability | Minor bump, "Features" section |
    | `fix` | Bug fix | Patch bump, "Bug Fixes" section |
    | `perf` | Performance improvement | Patch bump |
-   | `refactor` | Restructure, no behavior change | Patch bump |
+   | `refactor` | Restructure, no behavior change | No version bump |
    | `docs` | Documentation only | No version bump |
    | `chore` | Maintenance, tooling | No version bump |
    | `ci` | CI/CD workflow changes | No version bump |
    | `test` | Test-only changes | No version bump |
+
+   "No version bump" means release-please does not open a release PR for it at
+   all — it is a hidden type. A change users will notice that only fits a hidden
+   type (a new CI gate under `ci`, a behaviour-changing `refactor`) still has to
+   ship: put a `Release-As: X.Y.Z` footer in the PR body (the body becomes the
+   squash commit's message) and release-please cuts that version.
 
 4. Breaking changes append `!` after the type (`feat!:`) or add a `BREAKING CHANGE:`
    footer — either triggers a major bump. Use whichever is more visible for the
