@@ -72,7 +72,7 @@ The headings are the forms' `label:` values (`Priority`, `Area`, `Subtype` — p
 resolves them against its allowlists. `### Subtype` exists only on the Task form.
 
 The native issue type is separate. On an **organization** repository add
-`--type Bug|Feature|Task` — that is what the form would have set. On a **personal**
+`--type Task` (or `--type Bug` / `--type Feature`, matching the form you are imitating) — that is what the form would have set. On a **personal**
 account leave it out: `gh` refuses with `type "Task" not found; available types:`
 (GitHub reports none there — see `.github/PROJECT_FIELDS.md`, "When native issue
 types are unavailable"). There the default is no coarse Type at all; only if the
