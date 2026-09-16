@@ -64,6 +64,8 @@ gh release edit v0.2.0 --notes "TLDR: ...\n\n$(gh release view v0.2.0 --json bod
 
 ## Pitfalls
 
+- Shipping a release-worthy change under a hidden type (`ci`, `chore`, `docs`, `refactor`, `test`) and waiting for a release PR that never comes — release-please logs `No user facing commits found … skipping`. Either the type was wrong (`feat`/`fix`), or add `Release-As: X.Y.Z` to the PR body so the squash commit carries it (see `skills/branch-and-commit` rule 3).
+
 - Publishing or delivering a repository whose `LICENSE` still names the upstream template author — `head -3 LICENSE` before anything leaves the building. For client work an inherited MIT grants the client, and everyone else, far more than the commission contract does, and it cannot be withdrawn (`docs/setup/licensing.md`).
 - Enabling auto-merge on the release-please PR "to save a click" — this defeats the entire point of the human gate described in ADR-0002; the `push:main` race is only closed because a human reviews before merge.
 - Shipping release notes with only the generated Conventional Commit list and no TLDR — accurate for engineers, meaningless for the actual audience of a release announcement.
