@@ -3,7 +3,7 @@
 # must still match it.
 #
 # .github/labels.yml is the taxonomy's single home (skills/labels-and-taxonomy
-# rule 1), but three issue forms and the labeler workflow repeat some of its
+# rule 1), but three issue forms and the labeler source repeat some of its
 # values as static text, and nothing else notices when they drift: the form
 # still renders, the labeler still exits green, and ticking a box that names a
 # label the repo no longer has applies nothing. A downstream adopter renamed
@@ -36,7 +36,7 @@
 # dash (see h. for what older labelers can and cannot read). An option that
 # resolves to no declared name is reported as `?<option text>`.
 #
-#   j. while the labeler workflow exists, each managed field it reads must keep
+#   j. while a labeler exists, each managed field it reads must keep
 #      the heading it reads — `label: Priority`, `label: Subtype`,
 #      `label: Area` — because the issue body carries headings, not field
 #      ids; renaming one blinds the labeler while ids and options still match.
@@ -57,10 +57,12 @@
 #      every set comparison and be ignored at run time (newer labelers match
 #      the leading token and let the allowlist decide).
 #
-# Usage: scripts/check-label-forms.sh [labels-yml] [forms-dir] [labeler-yml]
-#   Defaults: .github/labels.yml .github/ISSUE_TEMPLATE
-#             .github/workflows/issue-labeler.yml
-#   The overrides exist so the parser can be exercised against fixtures.
+# Usage: scripts/check-label-forms.sh [labels-yml] [forms-dir] [labeler-source]
+#   Defaults: .github/labels.yml .github/ISSUE_TEMPLATE, and for the labeler
+#   source scripts/issue-labeler.js when it exists (the logic lives there
+#   since ADR-0008), else .github/workflows/issue-labeler.yml (older copies
+#   carry the script inline). The overrides exist so the parser can be
+#   exercised against fixtures.
 #
 # Exit status: 0 if every check passes, 1 otherwise.
 
@@ -70,7 +72,23 @@ cd "$(dirname "$0")/.."
 
 LABELS_FILE="${1:-.github/labels.yml}"
 FORMS_DIR="${2:-.github/ISSUE_TEMPLATE}"
-LABELER_FILE="${3:-.github/workflows/issue-labeler.yml}"
+LABELER_FILE="${3:-}"
+WORKFLOW_FILE=.github/workflows/issue-labeler.yml
+mixed_generations=0
+if [ -z "$LABELER_FILE" ]; then
+  if [ -f scripts/issue-labeler.js ]; then
+    LABELER_FILE=scripts/issue-labeler.js
+    # The script exists, but is the workflow the thin caller that runs it? An
+    # adopter who took scripts/ and kept an inline workflow is still running
+    # the inline copy — validate that, and say the set is torn.
+    if [ -f "$WORKFLOW_FILE" ] && grep -qE 'const ALLOWED_' "$WORKFLOW_FILE"; then
+      LABELER_FILE="$WORKFLOW_FILE"
+      mixed_generations=1
+    fi
+  else
+    LABELER_FILE="$WORKFLOW_FILE"
+  fi
+fi
 
 FALLBACK_TYPES="type:bug type:feature"
 
@@ -88,7 +106,7 @@ ok() {
 }
 
 # Every `- name:` entry in labels.yml, one per line. The same reading as
-# parse_labels_yml in scripts/bootstrap.sh and the labeler workflow: the name
+# parse_labels_yml in scripts/bootstrap.sh and the labeler: the name
 # is the rest of the line, trimmed — no quote or comment stripping, so a
 # quoted or inline-commented entry surfaces here as a mismatch, exactly as it
 # would misbehave in bootstrap. Whole-line comments never match.
@@ -272,7 +290,7 @@ for path in "$FORMS_DIR"/*.yml "$FORMS_DIR"/*.yaml; do
     fi
   fi
   # --- j: the headings the labeler reads (only while there is a labeler)
-  [ -f "$LABELER_FILE" ] || continue
+  [ -f "$LABELER_FILE" ] || [ -f .github/workflows/issue-labeler.yml ] || continue
   for pair in "area:Area" "priority:Priority" "subtype:Subtype"; do
     fid="${pair%%:*}"; want="${pair#*:}"
     has_field "$path" "$fid" || continue
@@ -289,8 +307,15 @@ if [ "$forms_seen" -eq 0 ]; then
 fi
 
 # --- c/d: labeler constants
+if [ "$mixed_generations" -eq 1 ]; then
+  fail "$WORKFLOW_FILE still carries the labeler inline while scripts/issue-labeler.js also exists — the running labeler is the inline one; take the workflow and the script together (docs/template/upgrading.md)"
+fi
 if [ ! -f "$LABELER_FILE" ]; then
   echo "SKIP: $LABELER_FILE not present"
+elif case "$LABELER_FILE" in *.yml|*.yaml) true ;; *) false ;; esac && grep -qF 'issue-labeler.js' "$LABELER_FILE" && grep -qF 'require(' "$LABELER_FILE"; then
+  # The workflow is the thin caller shape (ADR-0008) but the script it
+  # requires is not here: the labeler would fail on every issue event.
+  fail "$LABELER_FILE requires scripts/issue-labeler.js, which is missing — take the workflow and the script together (docs/template/upgrading.md)"
 else
   lab_prio="$(labeler_list "$LABELER_FILE" ALLOWED_PRIORITIES | with_prefix 'priority:')"
   compare "labeler ALLOWED_PRIORITIES matches the priority:* set in $LABELS_FILE" "$priorities" "$lab_prio" \
@@ -304,7 +329,7 @@ else
     lab_areas="$(labeler_list "$LABELER_FILE" ALLOWED_AREAS | with_prefix '')"
     compare "labeler ALLOWED_AREAS matches the area:* set in $LABELS_FILE" "$areas" "$lab_areas" \
       "fix: edit the ALLOWED_AREAS constant in $LABELER_FILE — or take the labeler that reads labels.yml at run time (github-project-os #45)"
-  elif grep -qF "path: '.github/labels.yml'" "$LABELER_FILE" && grep -qE 'ALLOWED_AREAS = await ' "$LABELER_FILE"; then
+  elif grep -qF 'labels.yml' "$LABELER_FILE" && grep -qE 'loadAllowedAreas|readAllowedAreas' "$LABELER_FILE"; then
     ok "labeler reads area:* from $LABELS_FILE at run time (no ALLOWED_AREAS constant to drift)"
   else
     fail "labeler neither declares ALLOWED_AREAS nor loads it from .github/labels.yml — every Area selection would be ignored, or the script would throw"

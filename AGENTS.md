@@ -16,7 +16,7 @@ Agent-specific entry files (`CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructi
 
 ## Build and validation
 
-The Makefile is the only executable contract in this repository. CI calls make targets; customize the Makefile, never the workflows. The single exception is runner selection, which GitHub resolves before any make target exists to be called: set the `RUNNER_LABELS` repository variable instead of editing `runs-on` (see `docs/setup/runners.md`).
+The Makefile is the only executable contract in this repository. CI calls make targets; customize the Makefile, never the workflows. Two exceptions, neither of which puts adopter values in the YAML: runner selection, which GitHub resolves before any make target exists to be called — set the `RUNNER_LABELS` repository variable instead of editing `runs-on` (see `docs/setup/runners.md`); and event handlers that need the token and payload, whose logic lives in `scripts/*.js` behind a thin `github-script` caller and is tested by `make check` (the issue labeler; ADR-0008).
 
 | Level | Name | Command | When required |
 | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ The Makefile is the only executable contract in this repository. CI calls make t
 | `skills/` | Reusable knowledge modules (one directory per skill, `SKILL.md` inside) |
 | `docs/adr/` | Architecture Decision Records |
 | `docs/setup/` | Bootstrap and GitHub configuration guides |
-| `scripts/` | Bootstrap and self-consistency check scripts |
+| `scripts/` | Bootstrap, self-consistency checks, and the event-handler logic workflows call (`issue-labeler.js`; ADR-0008) |
 | `Makefile` | Canonical target contract (validation ladder entry points) |
 
 ## Workflow

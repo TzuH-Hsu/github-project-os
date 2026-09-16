@@ -20,6 +20,7 @@ Install the lint tools used by `make lint-docs`:
 | Tool | Install |
 | --- | --- |
 | markdownlint-cli2 | `npm install -g markdownlint-cli2` |
+| node (any LTS) | `brew install node` — runs `scripts/issue-labeler.test.js` in `make check` |
 | yamllint | `brew install yamllint` (or `pip install yamllint`) |
 | lychee | `brew install lychee` |
 | actionlint | `brew install actionlint` |
