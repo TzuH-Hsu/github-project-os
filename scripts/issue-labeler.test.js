@@ -158,6 +158,8 @@ test("this repository's labels.yml: a declared area is applied, an undeclared on
   const areas = labeler.readAllowedAreas(path.join(__dirname, '..'));
   if (areas.length === 0) return; // an adopter may have dropped the family entirely
   const first = areas[0];
-  const r = changes(`### Area\n\n- [x] ${first} — declared\n- [x] area:not-declared-anywhere — n`, [], areas);
+  let undeclared = 'area:undeclared';
+  while (areas.includes(undeclared)) undeclared += '-x';
+  const r = changes(`### Area\n\n- [x] ${first} — declared\n- [x] ${undeclared} — n`, [], areas);
   assert.deepEqual(r.toAdd, [first]);
 });
