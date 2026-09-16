@@ -51,8 +51,8 @@ name: CI
 # fork PRs, `contents: read` here) and the run-scoped runtime token in its
 # environment — nothing this public repository does not already expose, but
 # not zero either, which is why the step stays tiny. The script uses the
-# client for exactly one read: confirming the linked issue exists and is an
-# issue, not a pull request.
+# client for exactly one read: confirming the linked issue exists, is open,
+# and is an issue, not a pull request.
 
 on:
   pull_request:

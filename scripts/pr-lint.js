@@ -11,8 +11,8 @@
 //   1. the head branch is `<type>/<issue#>-<slug>`;
 //   2. the body links an issue with a GitHub closing keyword (`Closes #N`);
 //   3. exactly one issue in this repository is closed, and it is the branch's;
-//   4. that issue exists and is an issue, not a pull request (a made-up
-//      number would otherwise satisfy 1-3).
+//   4. that issue exists, is open, and is an issue, not a pull request (a
+//      made-up or already-closed number would otherwise satisfy 1-3).
 // Bot PRs (release-please, Dependabot) have no issue and are exempt — by WHO
 // opened them, never by branch name: on a public repository a fork author
 // picks the head branch name, so `release-please--…` proves nothing.
@@ -130,6 +130,7 @@ async function verifyIssue(github, owner, repo, number) {
     throw new Error(`could not verify issue #${number}: ${err && err.message ? err.message : err}`);
   }
   if (issue && issue.pull_request) return `#${number} is a pull request, not an issue — link the issue the work is for`;
+  if (issue && issue.state === 'closed') return `issue #${number} is already closed, so merging cannot close it — reopen it, or open a follow-up issue and link that`;
   return null;
 }
 
