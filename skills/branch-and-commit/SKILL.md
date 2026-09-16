@@ -32,10 +32,13 @@ code that closes it. Getting the format right keeps `git log`, the changelog, an
    | `test` | Test-only changes | No version bump |
 
    "No version bump" means release-please does not open a release PR for it at
-   all — it is a hidden type. A change users will notice that only fits a hidden
-   type (a new CI gate under `ci`, a behaviour-changing `refactor`) still has to
-   ship: put a `Release-As: X.Y.Z` footer in the PR body (the body becomes the
-   squash commit's message) and release-please cuts that version.
+   all — it is a hidden type, and it is also left out of the changelog. So first
+   ask whether the type is right: a change users will notice is usually a `feat`
+   or a `fix`, not a hidden type. When the type is genuinely right and a tag is
+   still needed (a new CI gate under `ci` that adopters must pick up), put
+   `Release-As: X.Y.Z` in the PR body — the body becomes the squash commit's
+   message — with X.Y.Z the current version plus one patch; anything larger means
+   the type was wrong (see `skills/release-management` rule 2).
 
 4. Breaking changes append `!` after the type (`feat!:`) or add a `BREAKING CHANGE:`
    footer — either triggers a major bump. Use whichever is more visible for the

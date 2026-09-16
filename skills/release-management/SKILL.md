@@ -17,7 +17,7 @@ A release must never ship from an unverified state, and version/changelog bookke
    2. **A human merges the release PR — never auto-merge.** The branch ruleset requires the `ci` status check to be green before merge is even possible; this is the mitigation for the fact that both CI and release-please trigger on `push:main`, so an unverified commit could otherwise reach the release PR.
    3. Merging the release PR cuts the git tag and GitHub Release automatically.
    4. The maintainer then edits the published release notes to add a short, hand-written TLDR **above** the generated changelog. Release notes have non-technical readers — the generated bullet list alone is not the message.
-2. **Version bump is derived, not chosen.** It comes from Conventional Commit types accumulated since the last release: `fix` → patch, `feat` → minor, any commit with `!` or a `BREAKING CHANGE:` footer → major. This is exactly why commit type discipline matters (see `CONTRIBUTING.md`).
+2. **Version bump is derived, not chosen.** It comes from Conventional Commit types accumulated since the last release: `fix` → patch, `feat` → minor, any commit with `!` or a `BREAKING CHANGE:` footer → major. This is exactly why commit type discipline matters (see `CONTRIBUTING.md`). One exception: a change that adopters must pick up but that genuinely is a hidden type (a new CI gate under `ci`) produces no release on its own; then a `Release-As: X.Y.Z` footer in the PR body cuts one, and X.Y.Z is always the current version plus one patch — if you want more than a patch, the type was wrong, and a hidden type also keeps the change out of the changelog.
 3. **Pre-1.0 semantics**: a minor bump may contain breaking changes. Don't assume `0.x` minor bumps are safe to blindly consume — read the changelog.
 4. **Documented alternative — manual tag-first.** Use this instead of release-please when release cadence is near-zero or the team wants zero release automation:
    1. Decide the version by hand.
@@ -64,7 +64,7 @@ gh release edit v0.2.0 --notes "TLDR: ...\n\n$(gh release view v0.2.0 --json bod
 
 ## Pitfalls
 
-- Shipping a release-worthy change under a hidden type (`ci`, `chore`, `docs`, `refactor`, `test`) and waiting for a release PR that never comes — release-please logs `No user facing commits found … skipping`. Either the type was wrong (`feat`/`fix`), or add `Release-As: X.Y.Z` to the PR body so the squash commit carries it (see `skills/branch-and-commit` rule 3).
+- Shipping a release-worthy change under a hidden type (`ci`, `chore`, `docs`, `refactor`, `test`) and waiting for a release PR that never comes — release-please logs `No user facing commits found … skipping`. Usually the type was wrong (`feat`/`fix`); when it was right, the `Release-As` exception in rule 2 applies.
 
 - Publishing or delivering a repository whose `LICENSE` still names the upstream template author — `head -3 LICENSE` before anything leaves the building. For client work an inherited MIT grants the client, and everyone else, far more than the commission contract does, and it cannot be withdrawn (`docs/setup/licensing.md`).
 - Enabling auto-merge on the release-please PR "to save a click" — this defeats the entire point of the human gate described in ADR-0002; the `push:main` race is only closed because a human reviews before merge.
