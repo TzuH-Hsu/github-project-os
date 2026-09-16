@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.1...v0.5.2) (2026-09-16)
+
+
+### Documentation
+
+* hidden commit types ship no release; refactor is one of them ([#71](https://github.com/TzuH-Hsu/github-project-os/issues/71)) ([819ce60](https://github.com/TzuH-Hsu/github-project-os/commit/819ce6057dbd1fa459ffbfd200c2aca861e50cec))
+
 ## [0.5.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.0...v0.5.1) (2026-09-16)
 
 
