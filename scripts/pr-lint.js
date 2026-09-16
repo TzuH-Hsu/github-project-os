@@ -2,15 +2,17 @@
 // pr-lint.js — the pull-request checks behind the `Lint the pull request`
 // step in .github/workflows/ci.yml. Same shape as scripts/issue-labeler.js
 // (ADR-0008): a pure lint() the tests exercise, and one run() the workflow
-// calls through actions/github-script. Nothing here needs the token; it reads
-// the pull_request payload and fails the job with a message that names the
-// fix.
+// calls through actions/github-script. It reads the pull_request payload and
+// makes one read call — does the linked issue exist, and is it an issue — then
+// fails the job with a message that names the fix.
 //
 // What it enforces — the two conventions AGENTS.md states and the PR template
 // carries, which were being broken silently:
 //   1. the head branch is `<type>/<issue#>-<slug>`;
 //   2. the body links an issue with a GitHub closing keyword (`Closes #N`);
-//   3. exactly one issue in this repository is closed, and it is the branch's.
+//   3. exactly one issue in this repository is closed, and it is the branch's;
+//   4. that issue exists and is an issue, not a pull request (a made-up
+//      number would otherwise satisfy 1-3).
 // Bot PRs (release-please, Dependabot) have no issue and are exempt — by WHO
 // opened them, never by branch name: on a public repository a fork author
 // picks the head branch name, so `release-please--…` proves nothing.
@@ -105,8 +107,23 @@ function lint({ headRef, body, repo, author, labels }) {
   return { exempt: false, why: null, problems, branchIssue, linked, cross };
 }
 
+// The one API read: 404 → the number is invented; a pull_request field →
+// the number is a PR, which GitHub would not close. Any other failure is a
+// failure — a check that cannot check must not pass.
+async function verifyIssue(github, owner, repo, number) {
+  let issue;
+  try {
+    ({ data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number }));
+  } catch (err) {
+    if (err && err.status === 404) return `issue #${number} does not exist in ${owner}/${repo} — the number is wrong, or the issue was never opened (AGENTS.md rule 1)`;
+    throw new Error(`could not verify issue #${number}: ${err && err.message ? err.message : err}`);
+  }
+  if (issue && issue.pull_request) return `#${number} is a pull request, not an issue — link the issue the work is for`;
+  return null;
+}
+
 // Entry point for actions/github-script.
-async function run({ context, core }) {
+async function run({ github, context, core }) {
   const pr = context.payload.pull_request;
   if (!pr) {
     core.info('not a pull_request event — nothing to lint');
@@ -124,6 +141,10 @@ async function run({ context, core }) {
     core.info(`PR lint skipped: ${result.why}`);
     return result;
   }
+  if (result.problems.length === 0 && github && context.repo) {
+    const problem = await verifyIssue(github, context.repo.owner, context.repo.repo, result.linked[0]);
+    if (problem) result.problems.push(problem);
+  }
   if (result.problems.length > 0) {
     core.setFailed(`PR lint failed:\n- ${result.problems.join('\n- ')}`);
     return result;
@@ -133,4 +154,4 @@ async function run({ context, core }) {
   return result;
 }
 
-module.exports = { run, lint, isExempt, linkedIssues, describe, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };
+module.exports = { run, lint, verifyIssue, isExempt, linkedIssues, describe, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };

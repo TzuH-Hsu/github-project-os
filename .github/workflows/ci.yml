@@ -50,8 +50,9 @@ name: CI
 # JS action, so the PR's script runs with the job's GITHUB_TOKEN (read-only on
 # fork PRs, `contents: read` here) and the run-scoped runtime token in its
 # environment — nothing this public repository does not already expose, but
-# not zero either, which is why the step stays tiny and does not take
-# `github`.
+# not zero either, which is why the step stays tiny. The script uses the
+# client for exactly one read: confirming the linked issue exists and is an
+# issue, not a pull request.
 
 on:
   pull_request:
@@ -63,7 +64,7 @@ on:
     # AFTER opening the PR; with a PAT-authored release PR that label is what
     # exempts it. Never narrow this list: a `types:` without the three
     # defaults is the "check never created" trap described above.
-    types: [opened, synchronize, reopened, edited, ready_for_review, labeled]
+    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
@@ -97,7 +98,7 @@ jobs:
         with:
           script: |
             const { run } = require(`${process.env.GITHUB_WORKSPACE}/scripts/pr-lint.js`);
-            await run({ context, core });
+            await run({ github, context, core });
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0

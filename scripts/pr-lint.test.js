@@ -93,7 +93,7 @@ test('bot PRs are exempt by author or by the release-please label — never by b
   assert.equal(lint({ headRef: 'dependabot/x', body: '', author: 'someone' }).exempt, false);
 });
 
-test('run: fails the job with every problem listed, passes with an info line, skips non-PR events', async () => {
+test('run: fails with every problem listed, verifies the issue exists and is not a PR, passes with an info line, skips non-PR events', async () => {
   const out = [];
   const core = { info: (m) => out.push(['info', m]), setFailed: (m) => out.push(['failed', m]) };
   await run({ context: { payload: { pull_request: { head: { ref: 'chore/-x' }, body: 'Closes #' } } }, core });
@@ -101,8 +101,18 @@ test('run: fails the job with every problem listed, passes with an info line, sk
   assert.equal(out[0][0], 'failed');
   assert.match(out[0][1], /^PR lint failed:\n- branch .*\n- body links no issue/s);
   out.length = 0;
-  await run({ context: { repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { head: { ref: 'fix/42-x' }, body: GOOD_BODY + 'Closes o/r#42\n' } } }, core });
+  const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404) { const e = new Error('Not Found'); e.status = 404; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
+  const ctx = (ref, body) => ({ repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { head: { ref }, body } } });
+  await run({ github: gh({ number: 42 }), context: ctx('fix/42-x', GOOD_BODY + 'Closes o/r#42\n'), core });
   assert.deepEqual(out, [['info', 'PR lint passed: branch issue #42, body closes #42']]);
+  out.length = 0;
+  await run({ github: gh(404), context: ctx('fix/999999-x', 'Closes #999999'), core });
+  assert.match(out[0][1], /issue #999999 does not exist/);
+  out.length = 0;
+  await run({ github: gh({ number: 42, pull_request: { url: 'x' } }), context: ctx('fix/42-x', GOOD_BODY), core });
+  assert.match(out[0][1], /#42 is a pull request, not an issue/);
+  out.length = 0;
+  await assert.rejects(() => run({ github: gh('boom'), context: ctx('fix/42-x', GOOD_BODY), core }), /could not verify issue #42/);
   out.length = 0;
   await run({ context: { payload: {} }, core });
   assert.equal(out[0][0], 'info');
