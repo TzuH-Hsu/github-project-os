@@ -1,6 +1,6 @@
 'use strict';
 // issue-labeler.test.js — exercises scripts/issue-labeler.js under plain node.
-// Run by scripts/check-issue-labeler.sh from `make check`. No dependencies:
+// Run by scripts/check-node-tests.sh from `make check`. No dependencies:
 // node:test + node:assert only. Fixtures are inline; the last group also runs
 // the real .github/labels.yml of the repository this file lives in.
 const { test } = require('node:test');

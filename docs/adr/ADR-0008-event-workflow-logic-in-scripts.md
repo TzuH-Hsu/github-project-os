@@ -12,8 +12,10 @@
 
 1. **The logic moves to `scripts/issue-labeler.js`**, a plain Node module with pure functions (`parseSections`, `matchAllowed`, `parseAllowedAreas`, `computeChanges`) and one I/O entry point (`run({github, context, core})`). The workflow checks out the default branch (`actions/checkout`, pinned, `persist-credentials: false`, `fetch-depth: 1`) and its `github-script` step is two lines: `require` the module, `await run(...)`.
 2. **`labels.yml` is read from the checkout, not the API.** On `issues` events `GITHUB_SHA` is the head of the default branch, so the checkout holds exactly the merged declarations — the same trust boundary the API read had, without the extra request.
-3. **The script is tested by `make check`** (`scripts/check-issue-labeler.sh` → `node --test scripts/issue-labeler.test.js`, node built-ins only). A missing `node` fails with an install hint, the way every other tool `make` needs does — never a green skip (validation-ladder rule 7).
-4. **Rule 1 names the shape.** Event-driven workflows that genuinely need the token and payload keep their logic in `scripts/*.js`, called through `github-script` after a checkout; the workflow stays a thin caller and carries no adopter values.
+3. **The script is tested by `make check`** (`scripts/check-node-tests.sh` → `node --test scripts/*.test.js`, node built-ins only). A missing `node` fails with an install hint, the way every other tool `make` needs does — never a green skip (validation-ladder rule 7).
+4. **Rule 1 names the shape.** Event-driven workflows that genuinely need the token or the payload keep their logic in `scripts/*.js`, called through `github-script` after a checkout; the workflow stays a thin caller and carries no adopter values.
+
+The second instance is `scripts/pr-lint.js` (#56): the `Lint the pull request` step in `ci.yml` fails the required check when a PR's branch is not `<type>/<issue#>-<slug>` or its body links no issue. It needs the payload, not the token, and follows the same shape.
 
 ## Consequences
 

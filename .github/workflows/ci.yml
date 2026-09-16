@@ -5,7 +5,8 @@ name: CI
 # Renaming the job key breaks every merge until the ruleset is updated to match.
 #
 # NEVER add a workflow-level `paths:`, `paths-ignore:`, or `branches:` filter to
-# `on.pull_request`. A filtered-out workflow does not run at all, so the `ci`
+# `on.pull_request`, and never make its `types:` anything less than a superset
+# of the defaults. A filtered-out workflow does not run at all, so the `ci`
 # check is never created, and the PR parks forever on "Expected - waiting for
 # status to be reported" with no failing job to point at. The repo becomes
 # unmergeable and the cause is not visible in the Actions tab.
@@ -35,9 +36,35 @@ name: CI
 # executes the PR's own Makefile and scripts. See docs/setup/runners.md.
 #
 # See docs/setup/runners.md before setting it.
+#
+# The `Lint the pull request` step (pull_request events only, step-level `if`
+# so the job still reports) fails this required check when the head branch is
+# not `<type>/<issue#>-<slug>` or the body links no issue — the logic is
+# scripts/pr-lint.js (ADR-0008), tested by `make check`. Bot PRs are exempt
+# by author (dependabot[bot], github-actions[bot]) or by release-please's
+# `autorelease: pending` label — never by branch name, which a fork author
+# chooses. Because this job already executes
+# the PR's own Makefile and scripts, it also runs the PR's own copy of
+# pr-lint.js; a PR can therefore weaken its own lint, and the reviewer sees
+# that in the diff. One difference from the `run:` steps: github-script is a
+# JS action, so the PR's script runs with the job's GITHUB_TOKEN (read-only on
+# fork PRs, `contents: read` here) and the run-scoped runtime token in its
+# environment — nothing this public repository does not already expose, but
+# not zero either, which is why the step stays tiny. The script uses the
+# client for exactly one read: confirming the linked issue exists, is open,
+# and is an issue, not a pull request.
 
 on:
   pull_request:
+    # A SUPERSET of the defaults (opened, synchronize, reopened). `edited` and
+    # `ready_for_review` are added so a PR that failed the lint on its body or
+    # title turns green when the author fixes it, without a push — "Re-run
+    # jobs" replays the ORIGINAL payload and would judge the old body.
+    # `labeled` is added because release-please applies `autorelease: pending`
+    # AFTER opening the PR; with a PAT-authored release PR that label is what
+    # exempts it. Never narrow this list: a `types:` without the three
+    # defaults is the "check never created" trap described above.
+    types: [opened, synchronize, reopened, edited, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
@@ -61,8 +88,17 @@ jobs:
           # scans every commit, not just the tip. Do not shallow this.
           fetch-depth: 0
           # This job only reads. Keeping the token out of .git/config denies it
-          # to every later step (and to any tool binary they install).
+          # to every `run:` step (and to any tool binary they install); the one
+          # `uses:` step below is the exception the header describes.
           persist-credentials: false
+
+      - name: Lint the pull request
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { run } = require(`${process.env.GITHUB_WORKSPACE}/scripts/pr-lint.js`);
+            await run({ github, context, core });
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
