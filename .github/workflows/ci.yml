@@ -40,8 +40,10 @@ name: CI
 # The `Lint the pull request` step (pull_request events only, step-level `if`
 # so the job still reports) fails this required check when the head branch is
 # not `<type>/<issue#>-<slug>` or the body links no issue — the logic is
-# scripts/pr-lint.js (ADR-0008), tested by `make check`. Bot branches
-# (release-please, Dependabot) are exempt. Because this job already executes
+# scripts/pr-lint.js (ADR-0008), tested by `make check`. Bot PRs are exempt
+# by author (dependabot[bot], github-actions[bot]) or by release-please's
+# `autorelease: pending` label — never by branch name, which a fork author
+# chooses. Because this job already executes
 # the PR's own Makefile and scripts, it also runs the PR's own copy of
 # pr-lint.js; a PR can therefore weaken its own lint, and the reviewer sees
 # that in the diff. One difference from the `run:` steps: github-script is a

@@ -11,7 +11,9 @@
 //   1. the head branch is `<type>/<issue#>-<slug>`;
 //   2. the body links an issue with a GitHub closing keyword (`Closes #N`);
 //   3. the branch's issue number is among the linked ones.
-// Bot branches (release-please, Dependabot) have no issue and are exempt.
+// Bot PRs (release-please, Dependabot) have no issue and are exempt — by WHO
+// opened them, never by branch name: on a public repository a fork author
+// picks the head branch name, so `release-please--…` proves nothing.
 //
 // The PR body is untrusted input. It is only ever matched as text here; the
 // numbers it yields go into a message, never into a command.
@@ -24,7 +26,12 @@ const BRANCH_RE = new RegExp(`^(${TYPES.join('|')})/(\\d+)-[a-z0-9][a-z0-9._-]*$
 // GitHub's closing keywords: optional colon, then `#N`, `owner/repo#N`, or a
 // full issue URL — the three forms GitHub itself links and auto-closes.
 const CLOSES_RE = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(?:https?:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)|([\w.-]+\/[\w.-]+)?#(\d+))\b/gi;
-const EXEMPT_BRANCH_PREFIXES = ['release-please--', 'dependabot/'];
+// Exempt when the PR was opened by one of these accounts (Dependabot;
+// release-please run with the default GITHUB_TOKEN), or carries the label
+// release-please always applies (covers release-please run with a PAT, where
+// the author is a human account). A fork author can choose neither.
+const EXEMPT_AUTHORS = ['dependabot[bot]', 'github-actions[bot]'];
+const EXEMPT_LABELS = ['autorelease: pending'];
 
 function stripHtmlComments(text) {
   return String(text || '').replace(/<!--[\s\S]*?-->/g, '');
@@ -48,16 +55,24 @@ function describe(ref) {
   return ref.repo ? `${ref.repo}#${ref.number}` : `#${ref.number}`;
 }
 
+function isExempt({ author, labels }) {
+  if (author && EXEMPT_AUTHORS.includes(author)) return `opened by ${author}`;
+  const hit = (labels || []).find((l) => EXEMPT_LABELS.includes(l));
+  return hit ? `carries the '${hit}' label` : null;
+}
+
 // Pure. `repo` is 'owner/name' when known (run() passes context.repo), so a
-// fully qualified self-reference is treated as local.
-// Returns { exempt, problems: [string], branchIssue, linked: [number], cross: [string] }.
-function lint({ headRef, body, repo }) {
+// fully qualified self-reference is treated as local. `author` is the PR
+// author's login and `labels` the PR's label names.
+// Returns { exempt, why, problems: [string], branchIssue, linked: [number], cross: [string] }.
+function lint({ headRef, body, repo, author, labels }) {
   const ref = String(headRef || '');
   const refs = linkedIssues(body, repo);
   const linked = refs.filter((r) => !r.repo).map((r) => r.number);
   const cross = refs.filter((r) => r.repo).map(describe);
-  if (EXEMPT_BRANCH_PREFIXES.some((p) => ref.startsWith(p))) {
-    return { exempt: true, problems: [], branchIssue: null, linked, cross };
+  const why = isExempt({ author, labels });
+  if (why) {
+    return { exempt: true, why, problems: [], branchIssue: null, linked, cross };
   }
   const problems = [];
   const branch = ref.match(BRANCH_RE);
@@ -82,7 +97,7 @@ function lint({ headRef, body, repo }) {
       `branch names issue #${branchIssue} but the body closes #${linked.join(', #')} — one of them is wrong`,
     );
   }
-  return { exempt: false, problems, branchIssue, linked, cross };
+  return { exempt: false, why: null, problems, branchIssue, linked, cross };
 }
 
 // Entry point for actions/github-script.
@@ -93,9 +108,15 @@ async function run({ context, core }) {
     return { exempt: true, problems: [] };
   }
   const repo = context.repo ? `${context.repo.owner}/${context.repo.repo}` : undefined;
-  const result = lint({ headRef: pr.head && pr.head.ref, body: pr.body, repo });
+  const result = lint({
+    headRef: pr.head && pr.head.ref,
+    body: pr.body,
+    repo,
+    author: pr.user && pr.user.login,
+    labels: (pr.labels || []).map((l) => l.name),
+  });
   if (result.exempt) {
-    core.info(`branch '${pr.head.ref}' is a bot branch — PR lint skipped`);
+    core.info(`PR lint skipped: ${result.why}`);
     return result;
   }
   if (result.problems.length > 0) {
@@ -107,4 +128,4 @@ async function run({ context, core }) {
   return result;
 }
 
-module.exports = { run, lint, linkedIssues, describe, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_BRANCH_PREFIXES };
+module.exports = { run, lint, isExempt, linkedIssues, describe, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };

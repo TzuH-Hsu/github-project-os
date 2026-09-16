@@ -12,7 +12,7 @@ const GOOD_BODY = '## Summary\n\nx\n\n## Related issue\n\nCloses #42\n';
 
 test('a conforming PR passes', () => {
   const r = lint({ headRef: 'fix/42-label-sync', body: GOOD_BODY });
-  assert.deepEqual(r, { exempt: false, problems: [], branchIssue: 42, linked: [42], cross: [] });
+  assert.deepEqual(r, { exempt: false, why: null, problems: [], branchIssue: 42, linked: [42], cross: [] });
 });
 
 test("TYPES equals the list in AGENTS.md's Branch step (the one home for it)", () => {
@@ -54,7 +54,7 @@ test('cross-repository references are kept apart from local ones and never satis
   assert.equal(only.problems.length, 1);
   assert.match(only.problems[0], /closes other\/repo#4 in another repository/);
   const both = lint({ headRef: 'fix/12-x', body: 'Closes #12, closes https://github.com/other/repo/issues/4', repo: 'o/r' });
-  assert.deepEqual(both, { exempt: false, problems: [], branchIssue: 12, linked: [12], cross: ['other/repo#4'] });
+  assert.deepEqual(both, { exempt: false, why: null, problems: [], branchIssue: 12, linked: [12], cross: ['other/repo#4'] });
 });
 
 test('a Refs-only body is told to split the work into a sub-issue', () => {
@@ -78,9 +78,16 @@ test('branch grammar: every CONTRIBUTING type, lowercase slug with dots/undersco
   }
 });
 
-test('bot branches are exempt regardless of body', () => {
-  assert.equal(lint({ headRef: 'release-please--branches--main', body: ':robot: I have created a release' }).exempt, true);
-  assert.equal(lint({ headRef: 'dependabot/github_actions/actions-f3c1f23acc', body: '' }).exempt, true);
+test('bot PRs are exempt by author or by the release-please label — never by branch name', () => {
+  assert.equal(lint({ headRef: 'release-please--branches--main', body: ':robot:', author: 'github-actions[bot]' }).exempt, true);
+  assert.equal(lint({ headRef: 'dependabot/github_actions/actions-f3c1f23acc', body: '', author: 'dependabot[bot]' }).exempt, true);
+  // release-please run with a PAT: human author, but the label it applies is proof enough
+  assert.equal(lint({ headRef: 'release-please--branches--main', body: ':robot:', author: 'someone', labels: ['autorelease: pending'] }).exempt, true);
+  // a fork author borrowing the bot branch name gets the full lint
+  const spoof = lint({ headRef: 'release-please--branches--main', body: 'hi', author: 'someone', labels: [] });
+  assert.equal(spoof.exempt, false);
+  assert.equal(spoof.problems.length, 2);
+  assert.equal(lint({ headRef: 'dependabot/x', body: '', author: 'someone' }).exempt, false);
 });
 
 test('run: fails the job with every problem listed, passes with an info line, skips non-PR events', async () => {
@@ -96,4 +103,7 @@ test('run: fails the job with every problem listed, passes with an info line, sk
   out.length = 0;
   await run({ context: { payload: {} }, core });
   assert.equal(out[0][0], 'info');
+  out.length = 0;
+  await run({ context: { payload: { pull_request: { head: { ref: 'release-please--branches--main' }, body: '', user: { login: 'github-actions[bot]' }, labels: [{ name: 'autorelease: pending' }] } } }, core });
+  assert.deepEqual(out, [['info', 'PR lint skipped: opened by github-actions[bot]']]);
 });
