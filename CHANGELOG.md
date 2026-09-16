@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.4.0...v0.4.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* de-template empties CHANGELOG.md instead of seeding it ([#57](https://github.com/TzuH-Hsu/github-project-os/issues/57)) ([86d505f](https://github.com/TzuH-Hsu/github-project-os/commit/86d505f4c7a52aecf3ec8a5effab0e1fb5d87aac))
+
 ## [0.4.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.3.1...v0.4.0) (2026-09-15)
 
 
