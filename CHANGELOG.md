@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.4.1...v0.5.0) (2026-09-16)
+
+
+### Features
+
+* issue labeler logic moves to scripts/issue-labeler.js with a durable test ([#63](https://github.com/TzuH-Hsu/github-project-os/issues/63)) ([f464cfb](https://github.com/TzuH-Hsu/github-project-os/commit/f464cfb0b3feb7e99fc33b0da742dfdf10a20691))
+
 ## [0.4.1](https://github.com/TzuH-Hsu/github-project-os/compare/v0.4.0...v0.4.1) (2026-09-16)
 
 
