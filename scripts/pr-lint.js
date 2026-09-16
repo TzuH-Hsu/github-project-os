@@ -35,15 +35,22 @@ const CLOSES_RE = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?):?\s+(?:https?:\/\
 const EXEMPT_AUTHORS = ['dependabot[bot]', 'github-actions[bot]'];
 const EXEMPT_LABELS = ['autorelease: pending'];
 
-function stripHtmlComments(text) {
-  return String(text || '').replace(/<!--[\s\S]*?-->/g, '');
+// GitHub links closing keywords in prose only: not inside HTML comments,
+// fenced code blocks or inline code spans. Strip those before matching so the
+// check agrees with what GitHub will actually close.
+function stripNonProse(text) {
+  return String(text || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/(^|\n)(`{3,}|~{3,})[^\n]*\n[\s\S]*?\n\2[ \t]*(?=\n|$)/g, '$1')
+    .replace(/`[^`\n]*`/g, '');
 }
+const stripHtmlComments = stripNonProse; // kept for callers of the old name
 
 // Every issue the body closes: [{ repo: 'owner/name' | null, number }]. A
 // reference qualified with this repository's own name counts as local.
 function linkedIssues(body, repo) {
   const seen = new Map();
-  for (const m of stripHtmlComments(body).matchAll(CLOSES_RE)) {
+  for (const m of stripNonProse(body).matchAll(CLOSES_RE)) {
     const qualifier = m[1] || m[3] || null;
     const number = Number(m[2] || m[4]);
     const local = !qualifier || (repo && qualifier.toLowerCase() === String(repo).toLowerCase());
@@ -86,12 +93,16 @@ function lint({ headRef, body, repo, author, labels }) {
     );
   }
   if (linked.length === 0) {
-    const tail = cross.length > 0
-      ? ` (it closes ${cross.join(', ')} in another repository; an issue in this one is still required — AGENTS.md rule 1)`
-      : ' (if this PR only advances an issue, give it a sub-issue it can close — skills/pr-authoring rule 5)';
     problems.push(
       'body links no issue in this repository — the PR template line is `Closes #<!-- issue number -->`; replace the comment ' +
-        `with the number. Any GitHub closing keyword works: Closes / Fixes / Resolves, optional colon, #N or a full issue URL${tail}`,
+        'with the number. Any GitHub closing keyword works: Closes / Fixes / Resolves, optional colon, #N or a full issue URL ' +
+        '(prose only — not inside code or an HTML comment). If this PR only advances an issue, give it a sub-issue it can close — skills/pr-authoring rule 5',
+    );
+  }
+  if (cross.length > 0) {
+    problems.push(
+      `body closes ${cross.join(', ')} in another repository — one issue per PR, and it lives here (skills/pr-authoring rule 5); ` +
+        'mention the other issue with "Refs" instead',
     );
   }
   if (linked.length > 1) {
@@ -154,4 +165,4 @@ async function run({ github, context, core }) {
   return result;
 }
 
-module.exports = { run, lint, verifyIssue, isExempt, linkedIssues, describe, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };
+module.exports = { run, lint, verifyIssue, isExempt, linkedIssues, describe, stripNonProse, stripHtmlComments, TYPES, BRANCH_RE, CLOSES_RE, EXEMPT_AUTHORS, EXEMPT_LABELS };

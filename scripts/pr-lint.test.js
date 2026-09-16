@@ -36,8 +36,13 @@ test('the untouched template line still fails: the number is inside an HTML comm
   assert.equal(r.problems.length, 1);
 });
 
-test('a closing keyword hidden inside an HTML comment does not count', () => {
+test('a closing keyword inside an HTML comment, a fenced block or inline code does not count', () => {
   assert.deepEqual(numbers('<!-- Closes #12 -->\nsome text'), []);
+  assert.deepEqual(numbers('```\nCloses #12\n```\n'), []);
+  assert.deepEqual(numbers('~~~bash\ngit commit -m "Closes #12"\n~~~'), []);
+  assert.deepEqual(numbers('use `Closes #12` in the body'), []);
+  assert.deepEqual(numbers('```\nCloses #12\n```\nCloses #13'), [13]);
+  assert.deepEqual(numbers('`x` Closes #14 `y`'), [14]);
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
@@ -47,14 +52,16 @@ test('all GitHub closing keywords, the colon form and the full URL form are reco
   assert.deepEqual(numbers('see #7 and refs #8 closes#9 Closes:#10'), []);
 });
 
-test('cross-repository references are kept apart from local ones and never satisfy the branch number', () => {
+test('a cross-repository close is a second issue: rejected alone and alongside a local one', () => {
   const only = lint({ headRef: 'fix/4-x', body: 'Closes other/repo#4', repo: 'o/r' });
   assert.deepEqual(only.linked, []);
   assert.deepEqual(only.cross, ['other/repo#4']);
-  assert.equal(only.problems.length, 1);
-  assert.match(only.problems[0], /closes other\/repo#4 in another repository/);
+  assert.equal(only.problems.length, 2); // no local issue + a cross-repo close
+  assert.match(only.problems[1], /closes other\/repo#4 in another repository/);
   const both = lint({ headRef: 'fix/12-x', body: 'Closes #12, closes https://github.com/other/repo/issues/4', repo: 'o/r' });
-  assert.deepEqual(both, { exempt: false, why: null, problems: [], branchIssue: 12, linked: [12], cross: ['other/repo#4'] });
+  assert.deepEqual(both.problems.length, 1);
+  assert.match(both.problems[0], /another repository/);
+  assert.deepEqual(lint({ headRef: 'fix/12-x', body: 'Closes #12, refs other/repo#4', repo: 'o/r' }).problems, []);
 });
 
 test('a Refs-only body is told to split the work into a sub-issue', () => {
@@ -104,7 +111,7 @@ test('run: fails with every problem listed, verifies the issue exists and is not
   const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404) { const e = new Error('Not Found'); e.status = 404; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
   const ctx = (ref, body) => ({ repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { head: { ref }, body } } });
   await run({ github: gh({ number: 42 }), context: ctx('fix/42-x', GOOD_BODY + 'Closes o/r#42\n'), core });
-  assert.deepEqual(out, [['info', 'PR lint passed: branch issue #42, body closes #42']]);
+  assert.deepEqual(out, [['info', 'PR lint passed: branch issue #42, body closes #42']]); // o/r#42 is this repo → local
   out.length = 0;
   await run({ github: gh(404), context: ctx('fix/999999-x', 'Closes #999999'), core });
   assert.match(out[0][1], /issue #999999 does not exist/);
