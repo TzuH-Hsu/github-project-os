@@ -23,7 +23,7 @@ command -v node >/dev/null 2>&1 || { echo "install: node (e.g. brew install node
 # is here — an adopter who takes a thin-caller workflow without its script
 # gets a job that fails on every event while `make check` stays green.
 missing=0
-for wf in .github/workflows/*.yml; do
+for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -f "$wf" ] || continue
   while IFS= read -r js; do
     [ -n "$js" ] || continue
