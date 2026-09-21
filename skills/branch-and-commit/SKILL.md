@@ -39,7 +39,11 @@ code that closes it. Getting the format right keeps `git log`, the changelog, an
    pick up), put `Release-As: X.Y.Z` in the body of the PR that *is* the change —
    the body becomes the squash commit's message — with X.Y.Z the current version
    plus one patch; anything larger means the type was wrong (see
-   `skills/release-management` rule 2). The one commit carrying `Release-As` is
+   `skills/release-management` rule 2). Only do this when no release is already
+   pending: the footer overrides the computed version for every commit since the
+   last tag, so with a release PR open (an unreleased `feat` or `fix`) a patch
+   footer would under-version it — leave the footer out and let the change ride
+   along. The one commit carrying `Release-As` is
    rendered in the changelog whatever its type, while the other hidden-type
    commits in the range stay out — so a footer on a follow-up PR makes the
    changelog name the follow-up instead of the change.
