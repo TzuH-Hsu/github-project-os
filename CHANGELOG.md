@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.2...v0.5.3) (2026-09-21)
+
+
+### Bug Fixes
+
+* the PR lint can read the linked issue on a private repository ([#76](https://github.com/TzuH-Hsu/github-project-os/issues/76)) ([7eb2dc0](https://github.com/TzuH-Hsu/github-project-os/commit/7eb2dc00f92cca6e8be210e9cbdf83f7f9b1dcb4))
+
 ## [0.5.2](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.1...v0.5.2) (2026-09-16)
 
 
