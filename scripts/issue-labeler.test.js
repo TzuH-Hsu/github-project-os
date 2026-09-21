@@ -98,9 +98,21 @@ test('dropdowns: case folded, allowlist decides, no second regex', () => {
   assert.deepEqual(none.toAdd, []);
 });
 
-test('a body without the sections strips form-managed labels but never type:bug/type:feature or unknown families', () => {
+test('a body without any form heading is not form-managed: hand-applied labels survive an edit (#78)', () => {
   const r = changes('just prose', ['priority:p2', 'area:pm', 'type:docs', 'type:bug', 'type:feature', 'wontfix']);
-  assert.deepEqual(r.toRemove, ['priority:p2', 'area:pm', 'type:docs']);
+  assert.deepEqual(r, { desired: [], toAdd: [], toRemove: [] });
+});
+
+test('each family follows its own heading: only the families whose heading is present are synced (#78)', () => {
+  // Only ### Area: area:* follows the checkboxes; a hand-applied priority and subtype are untouched
+  const areaOnly = changes('### Area\n\n- [x] area:ci — CI workflows\n- [ ] area:pm — PM', ['priority:p1', 'area:pm', 'type:docs']);
+  assert.deepEqual(areaOnly, { desired: ['area:ci'], toAdd: ['area:ci'], toRemove: ['area:pm'] });
+  // Only ### Priority, cleared to _No response_: the heading is there, so priority is synced (to nothing); area:* is not
+  const cleared = changes('### Priority\n\n_No response_', ['priority:p1', 'area:pm']);
+  assert.deepEqual(cleared, { desired: [], toAdd: [], toRemove: ['priority:p1'] });
+  // A Bug/Feature form (no ### Subtype): a stray subtype is left alone, priority and area still sync
+  const bug = changes('### Priority\n\np2 — Important, scheduled\n\n### Area\n\n- [x] area:pm — PM', ['type:docs', 'priority:p1']);
+  assert.deepEqual(bug, { desired: ['priority:p2', 'area:pm'], toAdd: ['priority:p2', 'area:pm'], toRemove: ['priority:p1'] });
 });
 
 test('stale area label outside the allowlist is still cleaned up (area: is a prefix match for removal)', () => {

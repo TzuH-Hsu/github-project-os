@@ -107,8 +107,10 @@ reviewer nothing to check against — rewrite before handing the issue to anyone
 - Opening a blank issue to "save time" — it skips native type assignment and the
   priority/area fields entirely, pushing the cleanup onto triage later.
 - An agent opening issues with `--body` prose and no `### Priority` / `### Area`
-  sections — every such issue is label-less, and adding the labels by hand only lasts
-  until the next edit. Use the form-shaped body above.
+  sections — every such issue is label-less. Labels added by hand do survive
+  edits (the labeler only syncs a family whose heading is in the body), but the
+  labels then live nowhere the form or the labeler can see, so the next
+  form-shaped edit of that body silently takes over. Use the form-shaped body above.
 
 ## Related
 
