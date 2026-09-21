@@ -48,11 +48,13 @@ name: CI
 # pr-lint.js; a PR can therefore weaken its own lint, and the reviewer sees
 # that in the diff. One difference from the `run:` steps: github-script is a
 # JS action, so the PR's script runs with the job's GITHUB_TOKEN (read-only on
-# fork PRs, `contents: read` here) and the run-scoped runtime token in its
-# environment — nothing this public repository does not already expose, but
-# not zero either, which is why the step stays tiny. The script uses the
-# client for exactly one read: confirming the linked issue exists, is open,
-# and is an issue, not a pull request.
+# fork PRs; `contents`, `issues` and `pull-requests` read here) and the
+# run-scoped runtime token in its environment — nothing this public
+# repository does not already expose, but not zero either, which is why the
+# step stays tiny. The script uses the client for exactly one read:
+# confirming the linked issue exists, is open, and is an issue, not a pull
+# request. The `permissions:` block below says why that read needs two
+# scopes beyond `contents`; take the block with the step when upgrading.
 
 on:
   pull_request:
@@ -71,6 +73,15 @@ on:
 
 permissions:
   contents: read
+  # The two extra read scopes exist for the lint step's one API call. On a
+  # public repository an issue is readable without them; on a PRIVATE one
+  # `issues.get` returns 403 "Resource not accessible by integration" under
+  # `contents: read` alone — measured, and it fails every PR. `issues: read`
+  # covers an issue number; `pull-requests: read` is needed as well when the
+  # number turns out to be a pull request, which the lint has to detect to
+  # reject it. Both are read-only; fork PRs get a read-only token anyway.
+  issues: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
