@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.3...v0.5.4) (2026-09-21)
+
+
+### Bug Fixes
+
+* the labeler syncs only the label families whose heading is in the body ([#79](https://github.com/TzuH-Hsu/github-project-os/issues/79)) ([ee2984f](https://github.com/TzuH-Hsu/github-project-os/commit/ee2984f077a46a26c9a21c37674b0a1000911644))
+
 ## [0.5.3](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.2...v0.5.3) (2026-09-21)
 
 
