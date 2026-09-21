@@ -42,11 +42,13 @@ const ALLOWED_PRIORITIES = ['p0', 'p1', 'p2', 'p3'];
 // equal.
 const ALLOWED_SUBTYPES = ['chore', 'ops', 'docs', 'security'];
 // The exact type:* labels this script owns. Deliberately NOT
-// `label.startsWith('type:')`: only task.yml has a Subtype dropdown, so on a
-// bug report or feature request `desired` never holds a type:* label — and a
-// prefix match would put every hand-applied type:* label into `toRemove` and
-// strip it on the next body edit.
+// `label.startsWith('type:')`: on a Task body (the only form with a Subtype
+// dropdown) a prefix match would put a hand-applied coarse type:bug /
+// type:feature (ADR-0006), or an adopter's own type:* label, into `toRemove`
+// and strip it on the next body edit.
 const FORM_MANAGED_TYPES = ALLOWED_SUBTYPES.map((s) => `type:${s}`);
+// The form headings that make a label family form-managed (see formHeadings).
+const FAMILY_HEADINGS = { Priority: 'priority', Subtype: 'subtype', Area: 'area' };
 
 const LABELS_YML = path.join('.github', 'labels.yml');
 
@@ -121,6 +123,13 @@ function matchAllowed(text, allowed) {
 
 // Pure: given the body, the issue's current labels and the area allowlist,
 // return what the labels should be and the delta to get there.
+// Which of the three form headings the body carries — the families the
+// labeler will sync. Empty means a prose issue: nothing is form-managed.
+function formHeadings(body) {
+  const sections = parseSections(body);
+  return Object.keys(FAMILY_HEADINGS).filter((h) => Object.hasOwn(sections, h));
+}
+
 function computeChanges({ body, currentLabels, allowedAreas }) {
   const sections = parseSections(body);
 
@@ -176,9 +185,9 @@ function computeChanges({ body, currentLabels, allowedAreas }) {
   // A family is only synced — and so only ever stripped — when its heading is
   // in the body. No heading at all means a prose issue: leave it alone (#78).
   const present = {
-    priority: 'Priority' in sections,
-    subtype: 'Subtype' in sections,
-    area: 'Area' in sections,
+    priority: Object.hasOwn(sections, 'Priority'),
+    subtype: Object.hasOwn(sections, 'Subtype'),
+    area: Object.hasOwn(sections, 'Area'),
   };
   function isSynced(label) {
     if (label.startsWith('priority:')) return present.priority;
@@ -206,6 +215,10 @@ async function run({ github, context, core, repoRoot }) {
   }
 
   const issue = context.payload.issue;
+  const headings = formHeadings(issue.body || '');
+  if (headings.length === 0) {
+    core.info('No form heading (### Priority / ### Subtype / ### Area) in the body: not form-managed, labels left as they are');
+  }
   const { desired, toAdd, toRemove } = computeChanges({
     body: issue.body || '',
     currentLabels: (issue.labels || []).map((l) => l.name),
@@ -230,6 +243,7 @@ async function run({ github, context, core, repoRoot }) {
 module.exports = {
   run,
   computeChanges,
+  formHeadings,
   parseSections,
   parseAllowedAreas,
   readAllowedAreas,
