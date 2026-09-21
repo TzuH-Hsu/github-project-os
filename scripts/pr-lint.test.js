@@ -122,7 +122,7 @@ test('run: fails with every problem listed, verifies the issue exists and is not
   assert.equal(out[0][0], 'failed');
   assert.match(out[0][1], /^PR lint failed:\n- branch .*\n- body links no issue/s);
   out.length = 0;
-  const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404) { const e = new Error('Not Found'); e.status = 404; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
+  const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404 || issue === 403) { const e = new Error(issue === 404 ? 'Not Found' : 'Resource not accessible by integration'); e.status = issue; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
   const ctx = (ref, body) => ({ repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { head: { ref }, body } } });
   await run({ github: gh({ number: 42, state: 'open' }), context: ctx('fix/42-x', GOOD_BODY + 'Closes o/r#42\n'), core });
   assert.deepEqual(out, [['info', 'PR lint passed: branch issue #42, body closes #42']]); // o/r#42 is this repo → local
@@ -137,6 +137,8 @@ test('run: fails with every problem listed, verifies the issue exists and is not
   assert.match(out[0][1], /issue #42 is already closed/);
   out.length = 0;
   await assert.rejects(() => run({ github: gh('boom'), context: ctx('fix/42-x', GOOD_BODY), core }), /could not verify issue #42/);
+  // a private repository under `contents: read` alone: the token, not the PR, is at fault — say which scopes
+  await assert.rejects(() => run({ github: gh(403), context: ctx('fix/42-x', GOOD_BODY), core }), /Resource not accessible by integration — .*`issues: read` and `pull-requests: read`/);
   out.length = 0;
   await run({ context: { payload: {} }, core });
   assert.equal(out[0][0], 'info');

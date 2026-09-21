@@ -214,6 +214,9 @@ async function verifyIssue(github, owner, repo, number) {
     ({ data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number }));
   } catch (err) {
     if (err && err.status === 404) return `issue #${number} does not exist in ${owner}/${repo} — the number is wrong, or the issue was never opened (AGENTS.md rule 1)`;
+    // 403 here is the job's token, not the PR: on a private repository the
+    // read needs `issues: read` and `pull-requests: read` (the ci job's permissions in ci.yml).
+    if (err && err.status === 403) throw new Error(`could not verify issue #${number}: ${err.message} — the workflow's GITHUB_TOKEN cannot read issues; on a private repository the job needs \`issues: read\` and \`pull-requests: read\` on the ci job's permissions block`);
     throw new Error(`could not verify issue #${number}: ${err && err.message ? err.message : err}`);
   }
   if (issue && issue.pull_request) return `#${number} is a pull request, not an issue — link the issue the work is for`;

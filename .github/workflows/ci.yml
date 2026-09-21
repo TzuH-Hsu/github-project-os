@@ -48,11 +48,13 @@ name: CI
 # pr-lint.js; a PR can therefore weaken its own lint, and the reviewer sees
 # that in the diff. One difference from the `run:` steps: github-script is a
 # JS action, so the PR's script runs with the job's GITHUB_TOKEN (read-only on
-# fork PRs, `contents: read` here) and the run-scoped runtime token in its
-# environment — nothing this public repository does not already expose, but
-# not zero either, which is why the step stays tiny. The script uses the
-# client for exactly one read: confirming the linked issue exists, is open,
-# and is an issue, not a pull request.
+# fork PRs; `contents`, `issues` and `pull-requests` read here) and the
+# run-scoped runtime token in its environment — nothing this public
+# repository does not already expose, but not zero either, which is why the
+# step stays tiny. The script uses the client for exactly one read:
+# confirming the linked issue exists, is open, and is an issue, not a pull
+# request. The `permissions:` block on the job says why that read needs two
+# scopes beyond `contents`; take the block with the step when upgrading.
 
 on:
   pull_request:
@@ -80,6 +82,20 @@ jobs:
   ci:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS || '["ubuntu-latest"]') }}
     timeout-minutes: 15
+    # The two extra read scopes exist for the lint step's one API call, and
+    # sit on this job rather than the workflow (github-actions-hygiene rule
+    # 2). On a public repository an issue is readable without them; on a
+    # PRIVATE one `issues.get` returns 403 "Resource not accessible by
+    # integration" under `contents: read` alone — measured, and it fails
+    # every PR. `issues: read` covers an issue number; `pull-requests: read`
+    # is needed as well when the number turns out to be a pull request,
+    # which the lint has to detect to reject it. Both are read-only; fork
+    # PRs get a read-only token anyway. Job-level permissions cannot depend
+    # on the event, so the `push` path carries them too — reads only.
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
