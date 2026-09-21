@@ -190,8 +190,9 @@ function computeChanges({ body, currentLabels, allowedAreas }) {
   const current = currentLabels || [];
   const currentManaged = current.filter(isFormManaged);
   const toAdd = [...desired].filter((label) => !current.includes(label));
-  // On 'edited', drop previously form-managed labels the user un-selected.
-  // On 'opened' this is a no-op (nothing managed exists yet).
+  // Drop form-managed labels the body no longer selects. This runs on
+  // 'opened' as well: `gh issue create --label` puts labels on an issue
+  // before the first run, and they are subject to the same sync.
   const toRemove = currentManaged.filter((label) => isSynced(label) && !desired.has(label));
   return { desired: [...desired], toAdd, toRemove };
 }
