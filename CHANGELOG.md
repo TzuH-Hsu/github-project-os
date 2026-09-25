@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.4...v0.5.5) (2026-09-25)
+
+
+### Bug Fixes
+
+* the check scripts' torn-upgrade messages point at the upstream upgrading guide ([#85](https://github.com/TzuH-Hsu/github-project-os/issues/85)) ([f96d1c5](https://github.com/TzuH-Hsu/github-project-os/commit/f96d1c56a9b853f38c6d5e815ffc2f4e543de1e7))
+
 ## [0.5.4](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.3...v0.5.4) (2026-09-21)
 
 
