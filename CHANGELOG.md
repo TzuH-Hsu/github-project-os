@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.5...v0.5.6) (2026-09-26)
+
+
+### Documentation
+
+* a Release-As footer must be the squash commit's last line; set it with gh pr merge --body-file ([#93](https://github.com/TzuH-Hsu/github-project-os/issues/93)) ([8d13426](https://github.com/TzuH-Hsu/github-project-os/commit/8d1342606820ca837a808a029b39bd9e3b198b7b))
+
 ## [0.5.5](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.4...v0.5.5) (2026-09-25)
 
 
