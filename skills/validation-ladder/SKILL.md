@@ -72,7 +72,7 @@ lint-licenses: ## L4 - reject copyleft dependencies (adopter-defined)
 	@command -v syft >/dev/null 2>&1 || { echo "FAIL: syft not installed, cannot verify L4"; exit 1; }
 	@found=""; for m in $(MANIFESTS); do [ -s "$$m" ] && found=1; done; \
 	  [ -n "$$found" ] || { echo "FAIL: none of ($(MANIFESTS)) present - refusing to report a clean scan of nothing"; exit 1; }
-	syft dir:. -o json -q > $(SBOM_TMP)
+	syft dir:. --exclude './.github/**' -o json -q > $(SBOM_TMP)
 	scripts/check-licenses.py < $(SBOM_TMP)
 ```
 
@@ -85,10 +85,19 @@ fails (`set -o pipefail` is the alternative, but it is not portable to every
 adopter's `SHELL`). And an SBOM artifact is subject to the same rule as the
 check — an empty one is worse than none, because it looks like evidence.
 
-If you write the checker yourself, two things fail open by default: an SPDX `OR`
-is a *choice*, so `MIT OR GPL-2.0` must pass rather than fail, and `NOASSERTION`
-or an empty licence field must fail loudly, since that is what scanners emit for
-every package they could not resolve.
+The `--exclude './.github/**'` is load-bearing too: syft catalogs every action
+referenced in `.github/workflows/` as a `github-action` package with no licence,
+so without it a checker written as below fails on every repository made from
+this template. Actions are CI tooling, not something you ship.
+
+If you write the checker yourself, three things decide whether it is honest. An
+SPDX `OR` is a *choice*, so `MIT OR GPL-2.0` must pass rather than fail.
+`NOASSERTION` or an empty licence field must fail loudly, since that is what
+scanners emit for every package they could not resolve. And syft lists your
+project's own root package (the `name` in `package.json`, say) as a package
+too, carrying whatever your manifest declares for it — `UNLICENSED` for a
+private application, or nothing — so skip that one package by name; do not
+loosen the empty-licence rule to let it through.
 
 ## Pitfalls
 
