@@ -11,9 +11,20 @@ Repositories created from a template share no git history with it, so updates ar
 
    ```bash
    git remote add template https://github.com/OWNER/TEMPLATE-REPO.git
-   git fetch template --tags
-   git diff HEAD template/vX.Y.Z -- .github/ skills/ Makefile scripts/
+   git config remote.template.tagOpt --no-tags
+   git fetch template '+refs/tags/*:refs/template-tags/*'
+   git diff HEAD refs/template-tags/vX.Y.Z -- .github/ skills/ Makefile scripts/
    ```
+
+   The template's tags go under `refs/template-tags/`, never `refs/tags/`: the
+   template and your repository both number releases `vX.Y.Z`, so a plain
+   `git fetch template --tags` collides with your own tags (rejected, or
+   overwritten with `--force`) and a later `git push --tags` would publish the
+   template's to your remote. `tagOpt --no-tags` keeps an ordinary
+   `git fetch template` from importing them either. If a clone already ran
+   `--tags`, push any tag of your own that is not on your remote yet, then
+   `git tag -l | xargs git tag -d` and `git fetch origin --tags` — that also
+   repairs a tag `--force` overwrote.
 
 3. Cherry-pick what you want by path. Good candidates: `skills/`, `.github/workflows/` (the labeler workflow only calls code that lives elsewhere — take them together with `scripts/issue-labeler.js`, `scripts/pr-lint.js`, their `*.test.js`, `scripts/check-node-tests.sh`, `scripts/check-label-forms.sh` and the two `check:` lines in the Makefile; `make check` fails if a workflow requires a `scripts/*.js` that is not there; if you graft the `Lint the pull request` step into a customized `ci.yml` instead of taking the file, take the `ci` job's `permissions:` block too — `issues: read` and `pull-requests: read` are what let the lint read the linked issue on a private repository), `scripts/check-*.sh` (rarely customized locally). Careful candidates: `Makefile` (your `test` target lives there), `.github/labels.yml` (your renamed `area:*` labels), `AGENTS.md` (your conventions).
 4. Apply as a normal PR through your own CI. Never bulk-overwrite customized files.
