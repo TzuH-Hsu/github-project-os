@@ -72,7 +72,9 @@ lint-licenses: ## L4 - reject copyleft dependencies (adopter-defined)
 	@command -v syft >/dev/null 2>&1 || { echo "FAIL: syft not installed, cannot verify L4"; exit 1; }
 	@found=""; for m in $(MANIFESTS); do [ -s "$$m" ] && found=1; done; \
 	  [ -n "$$found" ] || { echo "FAIL: none of ($(MANIFESTS)) present - refusing to report a clean scan of nothing"; exit 1; }
-	syft dir:. --exclude './.github/**' -o json -q > $(SBOM_TMP)
+	syft dir:. -o json -q \
+	  --select-catalogers '-github-actions-usage-cataloger,-github-action-workflow-usage-cataloger' \
+	  > $(SBOM_TMP)
 	scripts/check-licenses.py < $(SBOM_TMP)
 ```
 
@@ -85,19 +87,23 @@ fails (`set -o pipefail` is the alternative, but it is not portable to every
 adopter's `SHELL`). And an SBOM artifact is subject to the same rule as the
 check — an empty one is worse than none, because it looks like evidence.
 
-The `--exclude './.github/**'` is load-bearing too: syft catalogs every action
-referenced in `.github/workflows/` as a `github-action` package with no licence,
-so without it a checker written as below fails on every repository made from
-this template. Actions are CI tooling, not something you ship.
+The `--select-catalogers` line is load-bearing too: syft catalogs every action
+a workflow or a local `action.yml` references as a `github-action` package with
+no licence, so without it a checker written as below fails on every repository
+made from this template. It switches off exactly those two catalogers; do not
+`--exclude './.github/**'` instead, which also drops the npm dependencies of a
+local JavaScript action under `.github/actions/` — the ones you do ship.
 
 If you write the checker yourself, three things decide whether it is honest. An
 SPDX `OR` is a *choice*, so `MIT OR GPL-2.0` must pass rather than fail.
 `NOASSERTION` or an empty licence field must fail loudly, since that is what
-scanners emit for every package they could not resolve. And syft lists your
-project's own root package (the `name` in `package.json`, say) as a package
-too, carrying whatever your manifest declares for it — `UNLICENSED` for a
-private application, or nothing — so skip that one package by name; do not
-loosen the empty-licence rule to let it through.
+scanners emit for every package they could not resolve. And syft lists the
+packages you author — the root `package.json`, a local action's own manifest —
+as packages too, carrying whatever the manifest declares (`UNLICENSED` for a
+private application, or nothing). Skip exactly those, by their full purl
+(ecosystem, name and version: `pkg:npm/my-app@1.0.0`), never by bare name — a
+third-party package from another ecosystem can share the name. Do not loosen
+the empty-licence rule to let them through.
 
 ## Pitfalls
 
