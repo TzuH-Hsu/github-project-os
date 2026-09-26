@@ -24,8 +24,9 @@ Repositories created from a template share no git history with it, so updates ar
    `git fetch template` from importing them either. If a clone already ran
    `--tags`, treat your remote as the only authority and push no tag from that
    clone — a tag `--force` overwrote now points at the template's commit. Run
-   `git tag -l | xargs git tag -d` and `git fetch origin --tags`; that restores
-   every tag your remote has. A tag of yours that was never pushed and shared a
+   `git for-each-ref --format='delete %(refname)' refs/tags | git update-ref --stdin`
+   (safe for any tag name, unlike `xargs`) and `git fetch origin --tags`; that
+   restores every tag your remote has. A tag of yours that was never pushed and shared a
    name with a template tag is gone from that clone: recreate it on its commit
    by hand (`git tag vX.Y.Z <sha>`).
 
