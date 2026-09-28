@@ -49,13 +49,26 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // fence closed by a line of the same character at least that long; unclosed,
 // it runs to EOF. A line-start `<!--` opens an HTML block (type 2) that ends
 // on the line containing `-->` (that whole line included); unclosed, EOF.
+// Fences and comments are recognised inside blockquotes too: the `>` markers
+// are stripped before the line is tested. An indented code block — lines
+// indented 4+ spaces (or a tab) that follow a blank line or more indented
+// code — is code, except inside a list, where the same indentation continues
+// the list item's prose; a list runs from a marker line until a blank line
+// followed by an unindented line that is not a marker.
+const QUOTE_RE = /^(?: {0,3}> ?)+/;
+const LIST_RE = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
 function stripBlocks(text) {
   const kept = [];
   let fence = null; // { ch, len }
   let comment = false;
+  let prevBlank = true; // the body starts a new block
+  let indented = false; // inside an indented code block
+  let inList = false;
   for (const line of text.split('\n')) {
+    const q = line.match(QUOTE_RE);
+    const body = q ? line.slice(q[0].length) : line;
     if (fence) {
-      const c = line.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      const c = body.match(/^ {0,3}(`+|~+)[ \t]*$/);
       if (c && c[1][0] === fence.ch && c[1].length >= fence.len) fence = null;
       continue;
     }
@@ -63,15 +76,28 @@ function stripBlocks(text) {
       if (line.includes('-->')) comment = false;
       continue;
     }
-    let f = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    const blank = body.trim() === '';
+    if (!blank && /^(?: {4}|\t)/.test(body) && (prevBlank || indented) && !inList) {
+      indented = true;
+      prevBlank = false;
+      continue;
+    }
+    if (!blank) indented = false;
+    let f = body.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
     // a backtick fence's info string may not contain a backtick — such a line
     // is inline code, not a fence
     if (f && f[1][0] === '`' && f[2].includes('`')) f = null;
-    if (f) { fence = { ch: f[1][0], len: f[1].length }; continue; }
-    if (/^ {0,3}<!--/.test(line)) {
-      if (!line.slice(line.indexOf('<!--') + 4).includes('-->')) comment = true;
+    if (f) { fence = { ch: f[1][0], len: f[1].length }; prevBlank = false; continue; }
+    if (/^ {0,3}<!--/.test(body)) {
+      if (!body.slice(body.indexOf('<!--') + 4).includes('-->')) comment = true;
+      prevBlank = false;
       continue;
     }
+    if (!blank && !/^(?: {4}|\t)/.test(body)) {
+      if (LIST_RE.test(body)) inList = true;
+      else if (prevBlank) inList = false;
+    }
+    prevBlank = blank;
     kept.push(line);
   }
   return kept.join('\n');
@@ -129,7 +155,10 @@ function stripInlineComments(text) {
 }
 
 function stripNonProse(text) {
-  return stripInlineComments(stripCodeSpans(stripBlocks(String(text || ''))));
+  // GitHub normalises line endings before rendering; so do we, or a CRLF body
+  // hides every fence's closing line (`~~~\r` is not a fence).
+  const lf = String(text || '').replace(/\r\n?/g, '\n');
+  return stripInlineComments(stripCodeSpans(stripBlocks(lf)));
 }
 const stripHtmlComments = stripNonProse; // kept for callers of the old name
 

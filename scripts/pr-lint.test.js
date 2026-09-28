@@ -57,6 +57,21 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('``Closes #15``'), []);
   assert.deepEqual(numbers('`` `Closes #16` `` and Closes #17'), [17]);
   assert.deepEqual(numbers('```Closes #18``` Closes #19'), [19]);
+  // CRLF bodies: both fence characters close (GitHub normalises line endings)
+  assert.deepEqual(numbers('~~~\r\nCloses #20\r\n~~~\r\n\r\nCloses #21'), [21]);
+  assert.deepEqual(numbers('```\r\nCloses #22\r\n```\r\n\r\nCloses #23'), [23]);
+  // a fence inside a blockquote is code; a plain quoted line is still prose
+  assert.deepEqual(numbers('> ~~~\n> Closes #24\n> ~~~\nCloses #25'), [25]);
+  assert.deepEqual(numbers('> Closes #26'), [26]);
+  // an indented code block is code; the same indentation continuing a list item or a paragraph is prose
+  assert.deepEqual(numbers('Summary\n\n    Closes #27\n'), []);
+  assert.deepEqual(numbers('    Closes #28'), []);
+  assert.deepEqual(numbers('Summary\n\n\tCloses #29'), []);
+  assert.deepEqual(numbers('- item\n\n    Closes #30'), [30]);
+  assert.deepEqual(numbers('1. item\n\n    Closes #31'), [31]);
+  assert.deepEqual(numbers('text\n    Closes #32'), [32]);
+  assert.deepEqual(numbers('- item\n\nparagraph\n\n    Closes #33'), []); // the paragraph ended the list
+  assert.deepEqual(numbers('    code\n\n    Closes #34\nCloses #35'), [35]); // one indented block across a blank line
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
