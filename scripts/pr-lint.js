@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 // pr-lint.js — the pull-request checks behind the `Lint the pull request`
 // step in .github/workflows/ci.yml. Same shape as scripts/issue-labeler.js

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 // pr-lint.test.js — exercises scripts/pr-lint.js under plain node.
 // Run by scripts/check-node-tests.sh from `make check`.
