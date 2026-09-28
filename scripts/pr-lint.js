@@ -91,21 +91,23 @@ function unquote(line, max = Infinity) {
   let col = 0;
   let depth = 0;
   let carry = 0;
-  let first = -1; // column of the first `>`
+  const marks = []; // per level: column of its `>`, relative to the enclosing level's content
+  let prevContent = 0;
   while (depth < max) {
     let j = i;
     let c = col;
     for (let k = 0; k < 3 && line[j] === ' '; k++) { j++; c++; }
     if (line[j] !== '>') break;
-    if (first < 0) first = c;
+    marks.push(c - prevContent);
     j++; c++; depth++;
     carry = 0;
     if (line[j] === ' ') { j++; c++; }
     else if (line[j] === '\t') { const w = 4 - (c % 4); j++; carry = w - 1; c += 1; }
     i = j;
     col = c;
+    prevContent = c;
   }
-  return { depth, body: ' '.repeat(carry) + line.slice(i), start: col, first };
+  return { depth, body: ' '.repeat(carry) + line.slice(i), start: col, marks };
 }
 const HEADING_RE = /^#{1,6}(?:[ \t]|$)/;
 const BREAK_RE = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
@@ -117,21 +119,22 @@ function stripBlocks(text) {
   let indented = false; // inside an indented code block
   let items = []; // content columns of the open list items, outermost first
   let prevDepth = 0;
-  let outer = []; // the list items around a quote, saved when it opened
+  const saved = []; // per quote depth: that level's list items, kept while a deeper quote is open
   const top = () => (items.length ? items[items.length - 1] : 0);
   for (const line of text.split('\n')) {
-    const { depth, body, start, first } = unquote(line);
+    const { depth, body, start, marks } = unquote(line);
     if (depth > prevDepth) {
       // a quote opened inside a list item keeps that item for after the quote;
       // one opened left of an item's content column ends the item
-      if (prevDepth === 0) outer = items.filter((c) => c <= first);
+      saved[prevDepth] = items.filter((c) => c <= marks[prevDepth]);
+      for (let k = prevDepth + 1; k < depth; k++) saved[k] = [];
       para = false; indented = false; items = [];
     } else if (depth < prevDepth && (!para || body.trim() === '')) {
       // a quote ends on a line with fewer markers, unless it lazily continues
       // the quote's paragraph; a blank line always ends it
       indented = false;
-      items = depth === 0 ? outer : [];
-      if (depth === 0) outer = [];
+      items = saved[depth] || [];
+      saved.length = depth;
     }
     prevDepth = depth;
     if (fence) {

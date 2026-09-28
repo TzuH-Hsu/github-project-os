@@ -112,6 +112,8 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   // a quote inside a list item: after the quote, the item's content column applies again
   assert.deepEqual(numbers('- item\n  > quote\n\n    Closes #64'), [64]);
   assert.deepEqual(numbers('- item\n> quote\n\n    Closes #65'), []); // quote at column 0 ends the list: top-level code
+  // the same one level down: a list inside a quote survives a nested quote
+  assert.deepEqual(numbers('> - item\n>   > nested\n>\n>     Closes #66'), [66]);
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
