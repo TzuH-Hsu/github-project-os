@@ -57,7 +57,7 @@ jobs:
       # and it is three GitHub API calls plus two registry fetches per week.
       - name: Run maintenance checks
         env:
-          # Lets check-tool-versions.sh use `gh` (1,000 req/hr per repo) rather
+          # Lets check-tool-versions.sh authenticate its GitHub lookups (1,000 req/hr per repo) rather
           # than the shared unauthenticated 60/hr-per-IP pool. Read-only public
           # metadata; the job keeps its top-level `contents: read` permission.
           GH_TOKEN: ${{ github.token }}

@@ -70,8 +70,13 @@ read_pin() {
 # and a cold CDN fetch of it has taken 45-55 s; this weekly job is not latency
 # bound, and a timeout here is reported as an ERROR, never as a pass.
 fetch_json_field() {
-  local url="$1" expr="$2" body
-  body="$(curl -fsSL --max-time 90 "$url")" || return 1
+  local url="$1" expr="$2" auth="${3:-}" body
+  if [ -n "$auth" ]; then
+    # header from a file descriptor, so the token is not in curl's argv
+    body="$(curl -fsSL --max-time 90 -H @<(printf 'Authorization: Bearer %s\n' "$auth") "$url")" || return 1
+  else
+    body="$(curl -fsSL --max-time 90 "$url")" || return 1
+  fi
   printf '%s' "$body" | python3 -c "
 import json,sys
 try:
@@ -81,18 +86,24 @@ except Exception:
 " || return 1
 }
 
-# Prefer gh so Actions runs authenticate with GITHUB_TOKEN (1,000 req/hr per
-# repo) instead of sharing the unauthenticated 60/hr-per-IP pool. Falls back to
-# the public REST endpoint so this still works without gh installed.
+# Authenticate when a token is at hand so Actions runs use GITHUB_TOKEN (1,000
+# req/hr per repo) instead of the unauthenticated 60/hr-per-IP pool: GH_TOKEN
+# or GITHUB_TOKEN from the environment, else a logged-in gh's token (a local
+# read, no network). The request itself always goes through curl, so it has
+# the same 90 s limit as every other lookup — `gh api` has no timeout, and a
+# stalled call would otherwise outlast the job.
+github_token() {
+  if [ -n "${GH_TOKEN:-}" ]; then printf '%s' "$GH_TOKEN"
+  elif [ -n "${GITHUB_TOKEN:-}" ]; then printf '%s' "$GITHUB_TOKEN"
+  elif command -v gh >/dev/null 2>&1; then gh auth token 2>/dev/null || true
+  fi
+}
+
 latest_github_tag() {
-  local repo="$1" tag=""
-  if command -v gh >/dev/null 2>&1; then
-    tag="$(gh api "repos/${repo}/releases/latest" --jq '.tag_name' 2>/dev/null)" || tag=""
-  fi
-  if [ -z "$tag" ]; then
-    tag="$(fetch_json_field "https://api.github.com/repos/${repo}/releases/latest" \
-      "json.load(sys.stdin)['tag_name']")" || return 1
-  fi
+  local repo="$1" tag token
+  token="$(github_token)"
+  tag="$(fetch_json_field "https://api.github.com/repos/${repo}/releases/latest" \
+    "json.load(sys.stdin)['tag_name']" "$token")" || return 1
   [ -n "$tag" ] || return 1
   printf '%s' "$tag"
 }
