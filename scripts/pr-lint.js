@@ -65,7 +65,7 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 //
 // This is an approximation of CommonMark's container rules, checked against
 // markdown-it on 3,000 generated bodies: no disagreement without nesting,
-// about 13 where two of blockquote/list/fence nest, about 87 where all three
+// about 7 where two of blockquote/list/fence nest, about 67 where all three
 // do (lists inside quotes holding fences). That is out of scope for
 // a PR-body convention check — the consequence is a closing keyword counted,
 // or not, when GitHub would do the opposite, and the issue is then closed by
@@ -130,8 +130,11 @@ function stripBlocks(text) {
     }
     const { col, rest } = lead(body);
     if (rest === '') { para = false; kept.push(line); continue; }
-    // outside a paragraph, a line left of an item's content column ends that item
-    if (!para) while (items.length && col < top()) items.pop();
+    // outside a paragraph, a line left of an item's content column ends that
+    // item; inside one, so does a block that interrupts the paragraph (a fence,
+    // a comment block, a heading, a break) — only paragraph text continues lazily
+    const starts = /^(?:`{3,}|~{3,}|<!--)/.test(rest) || HEADING_RE.test(rest) || BREAK_RE.test(rest);
+    if (!para || starts) while (items.length && col < top()) items.pop();
     const base = top();
     if (!para && col >= base + 4) { indented = true; continue; }
     indented = false;
@@ -150,8 +153,12 @@ function stripBlocks(text) {
     const m = rel <= 3 ? rest.match(MARKER_RE) : null;
     if (m) {
       while (items.length && col < top()) items.pop(); // a sibling or outer marker closes deeper items
-      const gap = m[2] === '' || m[2] === '\t' || m[2].length > 4 ? 1 : m[2].length;
-      items.push(col + m[1].length + gap);
+      // the padding after the marker in columns, tabs to 4-column stops
+      const end = col + m[1].length;
+      let pad = end;
+      for (const ch of m[2]) pad += ch === '\t' ? 4 - (pad % 4) : 1;
+      const gap = m[2] === '' || pad - end > 4 ? 1 : pad - end;
+      items.push(end + gap);
       para = m[2] !== '' && rest.slice(m[0].length).trim() !== '';
     } else {
       para = true;

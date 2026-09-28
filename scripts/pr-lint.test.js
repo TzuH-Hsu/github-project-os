@@ -93,6 +93,10 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   // nested lists: when the inner list ends, the outer item's column applies again
   assert.deepEqual(numbers('- outer\n  - inner\n\n  text\n\n    Closes #51'), [51]);
   assert.deepEqual(numbers('- outer\n  - inner\n\n        Closes #52'), []); // inner content column 4 + 4
+  // a fence interrupting a list item's paragraph at column 0 ends the list, so its lines are measured from column 0
+  assert.deepEqual(numbers('- item\n```\nCloses #53\n```\nCloses #54'), [54]);
+  // a tab after the marker reaches the next tab stop: content column 4, so six spaces continue the item
+  assert.deepEqual(numbers('-\titem\n\n      Closes #55'), [55]);
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
