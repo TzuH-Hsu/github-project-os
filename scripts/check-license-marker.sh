@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # check-license-marker.sh — asserts bootstrap.sh's template-copyright constants
 # still match LICENSE.
 #

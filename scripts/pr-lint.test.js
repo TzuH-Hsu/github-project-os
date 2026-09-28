@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 'use strict';
 // pr-lint.test.js — exercises scripts/pr-lint.js under plain node.
 // Run by scripts/check-node-tests.sh from `make check`.
@@ -137,13 +138,24 @@ test('run: fails with every problem listed, verifies the issue exists and is not
   assert.equal(out[0][0], 'failed');
   assert.match(out[0][1], /^PR lint failed:\n- branch .*\n- body links no issue/s);
   out.length = 0;
-  const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404 || issue === 403) { const e = new Error(issue === 404 ? 'Not Found' : 'Resource not accessible by integration'); e.status = issue; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
+  const gh = (issue) => ({ rest: { issues: { get: async () => { if (issue === 404 || issue === 403 || issue === 410) { const e = new Error({ 404: 'Not Found', 403: 'Resource not accessible by integration', 410: 'This issue was deleted' }[issue]); e.status = issue; throw e; } if (issue === 'boom') throw new Error('boom'); return { data: issue }; } } } });
   const ctx = (ref, body) => ({ repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { head: { ref }, body } } });
   await run({ github: gh({ number: 42, state: 'open' }), context: ctx('fix/42-x', GOOD_BODY + 'Closes o/r#42\n'), core });
   assert.deepEqual(out, [['info', 'PR lint passed: branch issue #42, body closes #42']]); // o/r#42 is this repo → local
   out.length = 0;
   await run({ github: gh(404), context: ctx('fix/999999-x', 'Closes #999999'), core });
   assert.match(out[0][1], /issue #999999 does not exist/);
+  out.length = 0;
+  await run({ github: gh(410), context: ctx('fix/22-x', 'Closes #22'), core });
+  assert.equal(out[0][0], 'failed');
+  assert.match(out[0][1], /issue #22 was deleted/);
+  out.length = 0;
+  // a closed PR is not linted at all — no API call, no failure
+  let called = false;
+  const spy = { rest: { issues: { get: async () => { called = true; return { data: {} }; } } } };
+  await run({ github: spy, context: { repo: { owner: 'o', repo: 'r' }, payload: { pull_request: { number: 23, state: 'closed', head: { ref: 'nope' }, body: 'Closes #22' } } }, core });
+  assert.deepEqual(out, [['info', 'PR lint skipped: pull request #23 is closed']]);
+  assert.equal(called, false);
   out.length = 0;
   await run({ github: gh({ number: 42, pull_request: { url: 'x' } }), context: ctx('fix/42-x', GOOD_BODY), core });
   assert.match(out[0][1], /#42 is a pull request, not an issue/);
