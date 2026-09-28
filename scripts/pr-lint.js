@@ -57,13 +57,16 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // container, after a blank line or more indented code — is code; inside a
 // list item the container is the item's content column (marker width plus
 // the spaces after it), so shallower indentation continues the item's prose.
-// A list ends when a blank line is followed by a line indented less than the
-// item's content column; a fence opened inside a list item ends with the item.
+// Only an open paragraph stops an indented code block — a line right after a
+// fence, a comment block, a heading or a blank line can start one. List items
+// nest: each open item's content column is kept, and a line outside a
+// paragraph that sits left of an item's column closes that item (and a fence
+// opened inside it).
 //
 // This is an approximation of CommonMark's container rules, checked against
-// markdown-it on generated bodies: without blockquote/list/fence nesting it
-// agrees on all but a handful in 3,000; the remaining disagreements need all
-// three nested (lists inside quotes holding fences). That is out of scope for
+// markdown-it on 3,000 generated bodies: no disagreement without nesting,
+// about 13 where two of blockquote/list/fence nest, about 87 where all three
+// do (lists inside quotes holding fences). That is out of scope for
 // a PR-body convention check — the consequence is a closing keyword counted,
 // or not, when GitHub would do the opposite, and the issue is then closed by
 // hand.
@@ -89,19 +92,23 @@ function unquote(line, n) {
   }
   return rest;
 }
+const HEADING_RE = /^#{1,6}(?:[ \t]|$)/;
+const BREAK_RE = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 function stripBlocks(text) {
   const kept = [];
   let fence = null; // { ch, len, depth, base }
   let comment = null; // quote depth of an open HTML comment block
-  let prevBlank = true; // the body starts a new block
+  let para = false; // an open paragraph: only it stops an indented code block
   let indented = false; // inside an indented code block
-  let listIndent = -1; // content column of the current list item; -1 = none
+  let items = []; // content columns of the open list items, outermost first
   let prevDepth = 0;
+  const top = () => (items.length ? items[items.length - 1] : 0);
   for (const line of text.split('\n')) {
     const q = line.match(QUOTE_RE);
     const depth = q ? q[0].split('>').length - 1 : 0;
     const body = q ? line.slice(q[0].length) : line;
-    if (depth > prevDepth) { prevBlank = true; indented = false; listIndent = -1; }
+    if (depth > prevDepth) { para = false; indented = false; items = []; }
+    else if (depth < prevDepth && !para) { indented = false; items = []; }
     prevDepth = depth;
     if (fence) {
       const inner = lead(unquote(line, fence.depth));
@@ -122,34 +129,33 @@ function stripBlocks(text) {
       comment = null;
     }
     const { col, rest } = lead(body);
-    const blank = rest === '';
-    const base = listIndent >= 0 && col >= listIndent ? listIndent : 0;
-    if (!blank && col >= base + 4 && (prevBlank || indented)) {
-      indented = true;
-      prevBlank = false;
-      continue;
-    }
-    if (!blank) indented = false;
-    let f = col - base <= 3 ? rest.match(/^(`{3,}|~{3,})(.*)$/) : null;
+    if (rest === '') { para = false; kept.push(line); continue; }
+    // outside a paragraph, a line left of an item's content column ends that item
+    if (!para) while (items.length && col < top()) items.pop();
+    const base = top();
+    if (!para && col >= base + 4) { indented = true; continue; }
+    indented = false;
+    const rel = col - base;
+    let f = rel <= 3 ? rest.match(/^(`{3,}|~{3,})(.*)$/) : null;
     // a backtick fence's info string may not contain a backtick — such a line
     // is inline code, not a fence
     if (f && f[1][0] === '`' && f[2].includes('`')) f = null;
-    if (f) { fence = { ch: f[1][0], len: f[1].length, depth, base }; prevBlank = false; continue; }
-    if (col - base <= 3 && rest.startsWith('<!--')) {
+    if (f) { fence = { ch: f[1][0], len: f[1].length, depth, base }; para = false; continue; }
+    if (rel <= 3 && rest.startsWith('<!--')) {
       if (!rest.slice(4).includes('-->')) comment = depth;
-      prevBlank = false;
+      para = false;
       continue;
     }
-    if (!blank) {
-      const m = rest.match(MARKER_RE);
-      if (m && col - base <= 3) {
-        const gap = m[2] === '' || m[2] === '\t' || m[2].length > 4 ? 1 : m[2].length;
-        listIndent = col + m[1].length + gap;
-      } else if (prevBlank && listIndent >= 0 && col < listIndent) {
-        listIndent = -1;
-      }
+    if (rel <= 3 && (HEADING_RE.test(rest) || BREAK_RE.test(rest))) { para = false; kept.push(line); continue; }
+    const m = rel <= 3 ? rest.match(MARKER_RE) : null;
+    if (m) {
+      while (items.length && col < top()) items.pop(); // a sibling or outer marker closes deeper items
+      const gap = m[2] === '' || m[2] === '\t' || m[2].length > 4 ? 1 : m[2].length;
+      items.push(col + m[1].length + gap);
+      para = m[2] !== '' && rest.slice(m[0].length).trim() !== '';
+    } else {
+      para = true;
     }
-    prevBlank = blank;
     kept.push(line);
   }
   return kept.join('\n');

@@ -86,6 +86,13 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('Summary\n\n \tCloses #45'), []);
   assert.deepEqual(numbers('Summary\n\n  \tCloses #46'), []);
   assert.deepEqual(numbers('- item\n\n\tCloses #47'), [47]); // tab to column 4 = item content column 2 + 2
+  // only an open paragraph stops indented code: after a comment block or a fence, it is code
+  assert.deepEqual(numbers('<!-- x -->\n    Closes #48'), []);
+  assert.deepEqual(numbers('```\nx\n```\n    Closes #49'), []);
+  assert.deepEqual(numbers('# Heading\n    Closes #50'), []);
+  // nested lists: when the inner list ends, the outer item's column applies again
+  assert.deepEqual(numbers('- outer\n  - inner\n\n  text\n\n    Closes #51'), [51]);
+  assert.deepEqual(numbers('- outer\n  - inner\n\n        Closes #52'), []); // inner content column 4 + 4
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
