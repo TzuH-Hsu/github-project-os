@@ -27,7 +27,7 @@ Why each piece of this repository exists, and what it costs to keep. A component
 | `scripts/bootstrap.sh` | Applies everything a template can't ship as files; idempotent sync | Highest-cost component — E2E-verified each release (below) |
 | `scripts/check-*.sh` | Self-consistency: skills index, local-md hygiene, licence marker, label values repeated in forms and the labeler, the `scripts/*.test.js` suites | Near zero |
 | `scripts/install-ci-tools.sh` | Checksum-verified CI tool installs; single home for all five tool version pins, shared by `ci.yml` and `maintenance.yml` via `make ci-tools`; bounds `RUNNER_LABELS` to linux x86_64 | Hand-bump a pin when the drift check flags it |
-| `scripts/check-tool-versions.sh` | Diffs those pins against upstream weekly and fails on drift — Dependabot cannot see them, so nothing else would | Near zero; add a row when a tool is added |
+| `scripts/check-tool-versions.sh` | Diffs those pins, plus any adopter rows in the optional `scripts/tool-pins.extra`, against upstream weekly and fails on drift — Dependabot cannot see them, so nothing else would | Near zero; add a row when a kit tool is added (adopter tools go in `tool-pins.extra`) |
 | `docs/adr/` | Decision records; the "why" layer | Grows slowly by trigger criteria |
 | `docs/setup/` | Bootstrap, licensing and runner-selection reference, plus manual fallbacks | Update alongside `bootstrap.sh` and the workflows |
 | `docs/template/` | Template-product meta (this dir); deleted on adoption | Only exists upstream |
