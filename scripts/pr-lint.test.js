@@ -73,6 +73,19 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('text\n    Closes #32'), [32]);
   assert.deepEqual(numbers('- item\n\nparagraph\n\n    Closes #33'), []); // the paragraph ended the list
   assert.deepEqual(numbers('    code\n\n    Closes #34\nCloses #35'), [35]); // one indented block across a blank line
+  // a quoted fence ends with its quote; the unquoted ``` after it opens a new fence
+  assert.deepEqual(numbers('> ```\n> Closes #36\n```\nCloses #37'), []);
+  assert.deepEqual(numbers('> ```\n> Closes #38\n\nCloses #39'), [39]);
+  // inside a top-level fence, a quoted ``` line is content, not the closing fence
+  assert.deepEqual(numbers('```\n> ```\nCloses #40\n```\nCloses #41'), [41]);
+  // indentation is measured from the list item's content column
+  assert.deepEqual(numbers('- item\n\n        Closes #42'), []);
+  assert.deepEqual(numbers('1. item\n\n       Closes #43'), []);
+  assert.deepEqual(numbers('10. item\n\n    Closes #44'), [44]); // content column 4: still the item's prose
+  // tabs expand to 4-column stops
+  assert.deepEqual(numbers('Summary\n\n \tCloses #45'), []);
+  assert.deepEqual(numbers('Summary\n\n  \tCloses #46'), []);
+  assert.deepEqual(numbers('- item\n\n\tCloses #47'), [47]); // tab to column 4 = item content column 2 + 2
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {

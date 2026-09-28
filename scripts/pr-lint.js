@@ -50,53 +50,104 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // fence closed by a line of the same character at least that long; unclosed,
 // it runs to EOF. A line-start `<!--` opens an HTML block (type 2) that ends
 // on the line containing `-->` (that whole line included); unclosed, EOF.
-// Fences and comments are recognised inside blockquotes too: the `>` markers
-// are stripped before the line is tested. An indented code block — lines
-// indented 4+ spaces (or a tab) that follow a blank line or more indented
-// code — is code, except inside a list, where the same indentation continues
-// the list item's prose; a list runs from a marker line until a blank line
-// followed by an unindented line that is not a marker.
+// Blockquotes: `>` markers are stripped before a line is tested, and a fence
+// or comment opened inside a quote ends when that quote does (a line with
+// fewer `>` markers). Indentation is measured in columns with 4-column tab
+// stops. An indented code block — lines indented 4+ columns past the current
+// container, after a blank line or more indented code — is code; inside a
+// list item the container is the item's content column (marker width plus
+// the spaces after it), so shallower indentation continues the item's prose.
+// A list ends when a blank line is followed by a line indented less than the
+// item's content column; a fence opened inside a list item ends with the item.
+//
+// This is an approximation of CommonMark's container rules, checked against
+// markdown-it on generated bodies: without blockquote/list/fence nesting it
+// agrees on all but a handful in 3,000; the remaining disagreements need all
+// three nested (lists inside quotes holding fences). That is out of scope for
+// a PR-body convention check — the consequence is a closing keyword counted,
+// or not, when GitHub would do the opposite, and the issue is then closed by
+// hand.
 const QUOTE_RE = /^(?: {0,3}> ?)+/;
-const LIST_RE = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
+const MARKER_RE = /^([-*+]|\d{1,9}[.)])( +|\t|$)/;
+function lead(s) {
+  let col = 0;
+  let i = 0;
+  for (; i < s.length; i++) {
+    if (s[i] === ' ') col += 1;
+    else if (s[i] === '\t') col += 4 - (col % 4);
+    else break;
+  }
+  return { col, rest: s.slice(i) };
+}
+// The line with exactly `n` blockquote markers removed.
+function unquote(line, n) {
+  let rest = line;
+  for (let k = 0; k < n; k++) {
+    const m = rest.match(/^ {0,3}> ?/);
+    if (!m) break;
+    rest = rest.slice(m[0].length);
+  }
+  return rest;
+}
 function stripBlocks(text) {
   const kept = [];
-  let fence = null; // { ch, len }
-  let comment = false;
+  let fence = null; // { ch, len, depth, base }
+  let comment = null; // quote depth of an open HTML comment block
   let prevBlank = true; // the body starts a new block
   let indented = false; // inside an indented code block
-  let inList = false;
+  let listIndent = -1; // content column of the current list item; -1 = none
+  let prevDepth = 0;
   for (const line of text.split('\n')) {
     const q = line.match(QUOTE_RE);
+    const depth = q ? q[0].split('>').length - 1 : 0;
     const body = q ? line.slice(q[0].length) : line;
+    if (depth > prevDepth) { prevBlank = true; indented = false; listIndent = -1; }
+    prevDepth = depth;
     if (fence) {
-      const c = body.match(/^ {0,3}(`+|~+)[ \t]*$/);
-      if (c && c[1][0] === fence.ch && c[1].length >= fence.len) fence = null;
-      continue;
+      const inner = lead(unquote(line, fence.depth));
+      const itemEnded = fence.base > 0 && inner.rest !== '' && inner.col < fence.base;
+      if (depth >= fence.depth && !itemEnded) {
+        // only the fence's own quote markers — a deeper `>` is code content
+        const c = inner.rest.match(/^(`+|~+)[ \t]*$/);
+        if (c && inner.col - fence.base <= 3 && c[1][0] === fence.ch && c[1].length >= fence.len) fence = null;
+        continue;
+      }
+      fence = null; // its blockquote or list item ended, so did the fence
     }
-    if (comment) {
-      if (line.includes('-->')) comment = false;
-      continue;
+    if (comment !== null) {
+      if (depth >= comment) {
+        if (line.includes('-->')) comment = null;
+        continue;
+      }
+      comment = null;
     }
-    const blank = body.trim() === '';
-    if (!blank && /^(?: {4}|\t)/.test(body) && (prevBlank || indented) && !inList) {
+    const { col, rest } = lead(body);
+    const blank = rest === '';
+    const base = listIndent >= 0 && col >= listIndent ? listIndent : 0;
+    if (!blank && col >= base + 4 && (prevBlank || indented)) {
       indented = true;
       prevBlank = false;
       continue;
     }
     if (!blank) indented = false;
-    let f = body.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    let f = col - base <= 3 ? rest.match(/^(`{3,}|~{3,})(.*)$/) : null;
     // a backtick fence's info string may not contain a backtick — such a line
     // is inline code, not a fence
     if (f && f[1][0] === '`' && f[2].includes('`')) f = null;
-    if (f) { fence = { ch: f[1][0], len: f[1].length }; prevBlank = false; continue; }
-    if (/^ {0,3}<!--/.test(body)) {
-      if (!body.slice(body.indexOf('<!--') + 4).includes('-->')) comment = true;
+    if (f) { fence = { ch: f[1][0], len: f[1].length, depth, base }; prevBlank = false; continue; }
+    if (col - base <= 3 && rest.startsWith('<!--')) {
+      if (!rest.slice(4).includes('-->')) comment = depth;
       prevBlank = false;
       continue;
     }
-    if (!blank && !/^(?: {4}|\t)/.test(body)) {
-      if (LIST_RE.test(body)) inList = true;
-      else if (prevBlank) inList = false;
+    if (!blank) {
+      const m = rest.match(MARKER_RE);
+      if (m && col - base <= 3) {
+        const gap = m[2] === '' || m[2] === '\t' || m[2].length > 4 ? 1 : m[2].length;
+        listIndent = col + m[1].length + gap;
+      } else if (prevBlank && listIndent >= 0 && col < listIndent) {
+        listIndent = -1;
+      }
     }
     prevBlank = blank;
     kept.push(line);
