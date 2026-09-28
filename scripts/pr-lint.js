@@ -150,7 +150,9 @@ function stripBlocks(text) {
       continue;
     }
     if (rel <= 3 && (HEADING_RE.test(rest) || BREAK_RE.test(rest))) { para = false; kept.push(line); continue; }
-    const m = rel <= 3 ? rest.match(MARKER_RE) : null;
+    let m = rel <= 3 ? rest.match(MARKER_RE) : null;
+    // an ordered marker other than 1, or an empty item, cannot interrupt a paragraph
+    if (m && para && ((/^\d/.test(m[1]) && parseInt(m[1], 10) !== 1) || rest.slice(m[0].length).trim() === '')) m = null;
     if (m) {
       while (items.length && col < top()) items.pop(); // a sibling or outer marker closes deeper items
       // the padding after the marker in columns, tabs to 4-column stops
@@ -159,6 +161,12 @@ function stripBlocks(text) {
       for (const ch of m[2]) pad += ch === '\t' ? 4 - (pad % 4) : 1;
       const gap = m[2] === '' || pad - end > 4 ? 1 : pad - end;
       items.push(end + gap);
+      if (pad - end > 4 && rest.slice(m[0].length).trim() !== '') {
+        // one column of padding, the rest indents the item's first line: code
+        para = false;
+        indented = true;
+        continue;
+      }
       para = m[2] !== '' && rest.slice(m[0].length).trim() !== '';
     } else {
       para = true;

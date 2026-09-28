@@ -97,6 +97,13 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('- item\n```\nCloses #53\n```\nCloses #54'), [54]);
   // a tab after the marker reaches the next tab stop: content column 4, so six spaces continue the item
   assert.deepEqual(numbers('-\titem\n\n      Closes #55'), [55]);
+  // more than 4 columns after the marker: one is padding, the rest makes the item's first line code
+  assert.deepEqual(numbers('-     Closes #56'), []);
+  assert.deepEqual(numbers('-    Closes #57'), [57]); // exactly 4: ordinary padding
+  // an ordered marker other than 1 cannot interrupt a paragraph, so no list opens and the indented line is code
+  assert.deepEqual(numbers('text\n2. item\n\n    Closes #58'), []);
+  assert.deepEqual(numbers('text\n1. item\n\n    Closes #59'), [59]);
+  assert.deepEqual(numbers('2. item\n\n    Closes #60'), [60]); // no paragraph open: 2. starts a list
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
