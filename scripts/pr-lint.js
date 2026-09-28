@@ -64,13 +64,13 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // opened inside it).
 //
 // This is an approximation of CommonMark's container rules, checked against
-// markdown-it on 6,000 generated bodies: no disagreement without nesting,
-// 1 where two of blockquote/list/fence nest, 29 where all three do (lists
-// inside quotes holding fences). That is out of scope for
+// markdown-it on 6,000 generated bodies: no disagreement unless blockquote,
+// list and fence all nest (27 such bodies, lists inside quotes holding
+// fences). That is out of scope for
 // a PR-body convention check — the consequence is a closing keyword counted,
 // or not, when GitHub would do the opposite, and the issue is then closed by
 // hand.
-const MARKER_RE = /^([-*+]|\d{1,9}[.)])( +|\t|$)/;
+const MARKER_RE = /^([-*+]|\d{1,9}[.)])([ \t]+|$)/;
 // Leading indentation of `s` in columns, counting tab stops from the
 // absolute column `start` where `s` begins.
 function lead(s, start = 0) {
@@ -111,6 +111,15 @@ function unquote(line, max = Infinity) {
 }
 const HEADING_RE = /^#{1,6}(?:[ \t]|$)/;
 const BREAK_RE = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+// Would this line start a block that can interrupt a paragraph (and so is
+// never a lazy continuation)? Blank lines count: they end the paragraph.
+function startsBlock(rest) {
+  if (rest === '' || rest.startsWith('<!--') || HEADING_RE.test(rest) || BREAK_RE.test(rest)) return true;
+  const f = rest.match(/^(`{3,}|~{3,})(.*)$/);
+  if (f && !(f[1][0] === '`' && f[2].includes('`'))) return true;
+  const m = rest.match(MARKER_RE);
+  return !!m && rest.slice(m[0].length).trim() !== '' && (!/^\d/.test(m[1]) || parseInt(m[1], 10) === 1);
+}
 function stripBlocks(text) {
   const kept = [];
   let fence = null; // { ch, len, depth, base }
@@ -122,7 +131,12 @@ function stripBlocks(text) {
   const saved = []; // per quote depth: that level's list items, kept while a deeper quote is open
   const top = () => (items.length ? items[items.length - 1] : 0);
   for (const line of text.split('\n')) {
-    const { depth, body, start, marks } = unquote(line);
+    const u0 = unquote(line);
+    const { body, start, marks } = u0;
+    // a lazy continuation line (fewer `>` inside an open paragraph, and itself
+    // paragraph text rather than a block start) stays in the quote: the
+    // containers remain open until the paragraph ends
+    const depth = u0.depth < prevDepth && para && !startsBlock(lead(body, start).rest) ? prevDepth : u0.depth;
     if (depth > prevDepth) {
       // a quote opened inside a list item keeps that item for after the quote;
       // one opened left of an item's content column ends the item
