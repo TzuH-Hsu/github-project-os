@@ -16,10 +16,12 @@
 // picks the head branch name, so `release-please--…` proves nothing.
 //
 // Which issues a PR closes is GitHub's answer, not ours: run() reads the
-// pull request's `closingIssuesReferences` (GraphQL). That is what GitHub
-// will actually close on merge — closing keywords in prose, never inside
-// code or comments, as GitHub renders them, plus issues linked by hand in
-// the sidebar — so the lint cannot disagree with GitHub about Markdown. An
+// pull request's `closingIssuesReferences` (GraphQL), restricted to the
+// issues the BODY closes (`excludeUserLinked`) — closing keywords in prose,
+// never inside code or comments, exactly as GitHub renders them — so the lint
+// cannot disagree with GitHub about Markdown. Issues linked by hand in the
+// sidebar are left out on purpose: changing that link fires no pull_request
+// event, so a green check could go stale without anything re-running it. An
 // earlier version parsed the body itself; nine review rounds of CommonMark
 // corner cases later, it still could not match GitHub (#104).
 //
@@ -45,7 +47,7 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 const CLOSING_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
-      closingIssuesReferences(first: 20) {
+      closingIssuesReferences(first: 20, excludeUserLinked: true) {
         nodes { number state repository { nameWithOwner } }
       }
     }
@@ -92,8 +94,9 @@ function lint({ headRef, refs, repo, author, labels }) {
     problems.push(
       'this PR closes no issue in this repository — the PR template line is `Closes #<!-- issue number -->`; replace the ' +
         'comment with the number. Any GitHub closing keyword works (Closes / Fixes / Resolves, #N or a full issue URL) in ' +
-        'prose — not in code or an HTML comment — or link the issue in the sidebar. A number that is a pull request, or an ' +
-        'issue that was deleted, closes nothing. If this PR only advances an issue, give it a sub-issue it can close — ' +
+        'prose — not in code or an HTML comment. An issue linked only in the sidebar does not count (changing that link ' +
+        're-runs no check). A number that is a pull request, or an issue that was deleted, closes nothing. If this PR only ' +
+        'advances an issue, give it a sub-issue it can close — ' +
         'skills/pr-authoring rule 5',
     );
   }

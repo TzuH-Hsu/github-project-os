@@ -35,6 +35,11 @@ test('the six-PR failure shape: empty issue slot in the branch and nothing close
   assert.match(r.problems[1], /sub-issue it can close/);
 });
 
+test('only the body counts: the query leaves out issues linked in the sidebar (no event re-runs the check when they change)', () => {
+  assert.match(require('./pr-lint.js').CLOSING_QUERY, /closingIssuesReferences\(first: 20, excludeUserLinked: true\)/);
+  assert.match(check('fix/42-x', []).problems[0], /linked only in the sidebar does not count/);
+});
+
 test('a reference to this repository by its full name is local, case-insensitively', () => {
   assert.deepEqual(check('fix/42-x', [open(42, 'O/R')]).problems, []);
 });
