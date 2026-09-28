@@ -13,7 +13,7 @@ Repositories created from a template share no git history with it, so updates ar
    git remote add template https://github.com/OWNER/TEMPLATE-REPO.git
    git config remote.template.tagOpt --no-tags
    git fetch template '+refs/tags/*:refs/template-tags/*'
-   git diff HEAD refs/template-tags/vX.Y.Z -- .github/ skills/ Makefile scripts/
+   git diff HEAD refs/template-tags/vX.Y.Z -- .github/ skills/ Makefile scripts/ AGENTS.md
    ```
 
    The template's tags go under `refs/template-tags/`, never `refs/tags/`: the
