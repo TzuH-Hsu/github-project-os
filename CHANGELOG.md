@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.7](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.6...v0.5.7) (2026-09-28)
+
+
+### Bug Fixes
+
+* pr-lint ignores Closes lines GitHub renders as code — indented blocks, CRLF fences, quoted fences ([#96](https://github.com/TzuH-Hsu/github-project-os/issues/96)) ([516ada1](https://github.com/TzuH-Hsu/github-project-os/commit/516ada1fdd93103ad33590fccbaf7712883c9db9))
+* pr-lint skips closed pull requests and reports a deleted issue as a lint problem ([#98](https://github.com/TzuH-Hsu/github-project-os/issues/98)) ([c35b709](https://github.com/TzuH-Hsu/github-project-os/commit/c35b709eaf233a3210dfc01598d75a6f2e5e2871))
+
 ## [0.5.6](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.5...v0.5.6) (2026-09-26)
 
 
