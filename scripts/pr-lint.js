@@ -64,33 +64,46 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 // opened inside it).
 //
 // This is an approximation of CommonMark's container rules, checked against
-// markdown-it on 3,000 generated bodies: no disagreement without nesting,
-// about 7 where two of blockquote/list/fence nest, about 67 where all three
-// do (lists inside quotes holding fences). That is out of scope for
+// markdown-it on 6,000 generated bodies: no disagreement without nesting,
+// 1 where two of blockquote/list/fence nest, 30 where all three do (lists
+// inside quotes holding fences). That is out of scope for
 // a PR-body convention check — the consequence is a closing keyword counted,
 // or not, when GitHub would do the opposite, and the issue is then closed by
 // hand.
-const QUOTE_RE = /^(?: {0,3}> ?)+/;
 const MARKER_RE = /^([-*+]|\d{1,9}[.)])( +|\t|$)/;
-function lead(s) {
-  let col = 0;
+// Leading indentation of `s` in columns, counting tab stops from the
+// absolute column `start` where `s` begins.
+function lead(s, start = 0) {
+  let col = start;
   let i = 0;
   for (; i < s.length; i++) {
     if (s[i] === ' ') col += 1;
     else if (s[i] === '\t') col += 4 - (col % 4);
     else break;
   }
-  return { col, rest: s.slice(i) };
+  return { col: col - start, rest: s.slice(i) };
 }
-// The line with exactly `n` blockquote markers removed.
-function unquote(line, n) {
-  let rest = line;
-  for (let k = 0; k < n; k++) {
-    const m = rest.match(/^ {0,3}> ?/);
-    if (!m) break;
-    rest = rest.slice(m[0].length);
+// Up to `max` blockquote markers removed: { depth, body, start }. A marker's
+// optional padding is one column — a space, or one column of a tab, whose
+// remaining columns stay in the body as spaces (CommonMark).
+function unquote(line, max = Infinity) {
+  let i = 0;
+  let col = 0;
+  let depth = 0;
+  let carry = 0;
+  while (depth < max) {
+    let j = i;
+    let c = col;
+    for (let k = 0; k < 3 && line[j] === ' '; k++) { j++; c++; }
+    if (line[j] !== '>') break;
+    j++; c++; depth++;
+    carry = 0;
+    if (line[j] === ' ') { j++; c++; }
+    else if (line[j] === '\t') { const w = 4 - (c % 4); j++; carry = w - 1; c += 1; }
+    i = j;
+    col = c;
   }
-  return rest;
+  return { depth, body: ' '.repeat(carry) + line.slice(i), start: col };
 }
 const HEADING_RE = /^#{1,6}(?:[ \t]|$)/;
 const BREAK_RE = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
@@ -104,14 +117,13 @@ function stripBlocks(text) {
   let prevDepth = 0;
   const top = () => (items.length ? items[items.length - 1] : 0);
   for (const line of text.split('\n')) {
-    const q = line.match(QUOTE_RE);
-    const depth = q ? q[0].split('>').length - 1 : 0;
-    const body = q ? line.slice(q[0].length) : line;
+    const { depth, body, start } = unquote(line);
     if (depth > prevDepth) { para = false; indented = false; items = []; }
     else if (depth < prevDepth && !para) { indented = false; items = []; }
     prevDepth = depth;
     if (fence) {
-      const inner = lead(unquote(line, fence.depth));
+      const u = unquote(line, fence.depth);
+      const inner = lead(u.body, u.start);
       const itemEnded = fence.base > 0 && inner.rest !== '' && inner.col < fence.base;
       if (depth >= fence.depth && !itemEnded) {
         // only the fence's own quote markers — a deeper `>` is code content
@@ -128,21 +140,22 @@ function stripBlocks(text) {
       }
       comment = null;
     }
-    const { col, rest } = lead(body);
+    const { col, rest } = lead(body, start);
     if (rest === '') { para = false; kept.push(line); continue; }
+    let fm = rest.match(/^(`{3,}|~{3,})(.*)$/);
+    // a backtick fence's info string may not contain a backtick — such a line
+    // is inline code, not a fence
+    if (fm && fm[1][0] === '`' && fm[2].includes('`')) fm = null;
     // outside a paragraph, a line left of an item's content column ends that
     // item; inside one, so does a block that interrupts the paragraph (a fence,
     // a comment block, a heading, a break) — only paragraph text continues lazily
-    const starts = /^(?:`{3,}|~{3,}|<!--)/.test(rest) || HEADING_RE.test(rest) || BREAK_RE.test(rest);
+    const starts = fm !== null || rest.startsWith('<!--') || HEADING_RE.test(rest) || BREAK_RE.test(rest);
     if (!para || starts) while (items.length && col < top()) items.pop();
     const base = top();
     if (!para && col >= base + 4) { indented = true; continue; }
     indented = false;
     const rel = col - base;
-    let f = rel <= 3 ? rest.match(/^(`{3,}|~{3,})(.*)$/) : null;
-    // a backtick fence's info string may not contain a backtick — such a line
-    // is inline code, not a fence
-    if (f && f[1][0] === '`' && f[2].includes('`')) f = null;
+    const f = rel <= 3 ? fm : null;
     if (f) { fence = { ch: f[1][0], len: f[1].length, depth, base }; para = false; continue; }
     if (rel <= 3 && rest.startsWith('<!--')) {
       if (!rest.slice(4).includes('-->')) comment = depth;
