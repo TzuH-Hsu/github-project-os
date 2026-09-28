@@ -214,6 +214,7 @@ async function verifyIssue(github, owner, repo, number) {
     ({ data: issue } = await github.rest.issues.get({ owner, repo, issue_number: number }));
   } catch (err) {
     if (err && err.status === 404) return `issue #${number} does not exist in ${owner}/${repo} — the number is wrong, or the issue was never opened (AGENTS.md rule 1)`;
+    if (err && err.status === 410) return `issue #${number} was deleted — link the issue the work is for, or open a new one`;
     // 403 here is the job's token, not the PR: on a private repository the
     // read needs `issues: read` and `pull-requests: read` (the ci job's permissions in ci.yml).
     if (err && err.status === 403) throw new Error(`could not verify issue #${number}: ${err.message} — the workflow's GITHUB_TOKEN cannot read issues; on a private repository the job needs \`issues: read\` and \`pull-requests: read\` on the ci job's permissions block`);
@@ -230,6 +231,12 @@ async function run({ github, context, core }) {
   if (!pr) {
     core.info('not a pull_request event — nothing to lint');
     return { exempt: true, problems: [] };
+  }
+  // A closed PR (merged or not) has no merge left to gate; editing its body
+  // still fires `edited`, and a red run there only adds noise.
+  if (pr.state === 'closed') {
+    core.info(`PR lint skipped: pull request #${pr.number} is closed`);
+    return { exempt: true, why: 'closed', problems: [] };
   }
   const repo = context.repo ? `${context.repo.owner}/${context.repo.repo}` : undefined;
   const result = lint({
