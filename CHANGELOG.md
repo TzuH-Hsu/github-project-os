@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.8](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.7...v0.5.8) (2026-09-28)
+
+
+### Documentation
+
+* licensing.md scopes the MIT header to the template's scripts, not all of scripts/ ([#109](https://github.com/TzuH-Hsu/github-project-os/issues/109)) ([27c0e9b](https://github.com/TzuH-Hsu/github-project-os/commit/27c0e9b47c4797bbdb4799ca3f6ad897e77ec9bc))
+
 ## [0.5.7](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.6...v0.5.7) (2026-09-28)
 
 
