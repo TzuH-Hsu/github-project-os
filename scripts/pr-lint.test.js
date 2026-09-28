@@ -93,7 +93,7 @@ test('bot PRs are exempt by author or by the release-please label — never by b
 
 // A GraphQL client stub: returns the queued answers in order (the last one
 // repeats), or throws what it is given.
-function graphqlStub(answers) {
+function graphqlStub(answers, updatedAt = '2026-01-01T00:00:00Z') {
   const calls = [];
   let i = 0;
   const github = {
@@ -101,7 +101,7 @@ function graphqlStub(answers) {
       calls.push(vars);
       const a = answers[Math.min(i++, answers.length - 1)];
       if (a instanceof Error) throw a;
-      return { repository: { pullRequest: { closingIssuesReferences: { nodes: a.map((r) => ({
+      return { repository: { pullRequest: { updatedAt, closingIssuesReferences: { nodes: a.map((r) => ({
         number: r.number, state: r.state || 'OPEN', repository: { nameWithOwner: r.repo || REPO },
       })) } } } };
     },
@@ -151,6 +151,11 @@ test('run: waits until the triggering edit is 15 s old before the first read, an
   waits.length = 0;
   await run({ github, context: ctx({ updated_at: '2026-09-29T10:00:00Z' }), core: coreSpy().core, sleep, now: () => t0 + 60000 });
   assert.equal(waits[0], 5000); // only the settle pause between the two reads
+  // a manual re-run: the replayed event is old, but the body was edited 2 s ago — wait on the live time
+  waits.length = 0;
+  const rerun = graphqlStub([[{ number: 42 }]], '2026-09-29T10:00:58Z');
+  await run({ github: rerun.github, context: ctx({ updated_at: '2026-09-29T09:00:00Z' }), core: coreSpy().core, sleep, now: () => t0 + 60000 });
+  assert.equal(waits[0], 13000);
 });
 
 test('run: fails with every problem listed', async () => {

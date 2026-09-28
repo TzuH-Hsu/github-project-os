@@ -26,11 +26,12 @@
 // corner cases later, it still could not match GitHub (#104).
 //
 // The field is updated a few seconds after a body edit (measured: 1-9 s). So
-// run() first waits until the PR's last update (`updated_at` in the event) is
-// at least 15 s old — two equal reads inside the lag window could both be
-// stale — then reads until two reads 5 s apart agree, up to a bound. Because
-// it reads live state rather than the event payload, "Re-run jobs" on a
-// failed lint re-checks the current body.
+// run() first waits until the PR's last update is at least 15 s old — two
+// equal reads inside the lag window could both be stale — then reads until two
+// reads 5 s apart agree, up to a bound. "Last update" is the later of the
+// event's `updated_at` and the live `updatedAt` from the same query: a manual
+// re-run replays the old event, but the lint reads live state, so "Re-run
+// jobs" re-checks the current body and must wait for its latest edit too.
 
 // The Conventional Commit types AGENTS.md lists (its "Branch" step is the one
 // home for this list; pr-lint.test.js asserts the two are equal). The branch
@@ -47,6 +48,7 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 const CLOSING_QUERY = `query($owner: String!, $repo: String!, $number: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
+      updatedAt
       closingIssuesReferences(first: 20, excludeUserLinked: true) {
         nodes { number state repository { nameWithOwner } }
       }
@@ -125,10 +127,11 @@ function lint({ headRef, refs, repo, author, labels }) {
   return { exempt: false, why: null, problems, branchIssue, linked, cross };
 }
 
-// One GraphQL read of the issues GitHub will close. A refused read is the
-// job's token, not the PR: say which scopes it needs. Anything else is a
-// failure too — a check that cannot check must not pass.
-async function closingRefs(github, owner, repo, number) {
+// One GraphQL read of the issues GitHub will close, and when the PR was last
+// updated: { refs, updatedAt }. A refused read is the job's token, not the
+// PR: say which scopes it needs. Anything else is a failure too — a check
+// that cannot check must not pass.
+async function closingRead(github, owner, repo, number) {
   let data;
   try {
     data = await github.graphql(CLOSING_QUERY, { owner, repo, number });
@@ -142,12 +145,16 @@ async function closingRefs(github, owner, repo, number) {
   }
   const pr = data && data.repository && data.repository.pullRequest;
   if (!pr) throw new Error(`could not read which issues PR #${number} closes: pull request not found`);
-  return pr.closingIssuesReferences.nodes.map((n) => ({
-    repo: n.repository.nameWithOwner,
-    number: n.number,
-    state: n.state,
-  }));
+  return {
+    updatedAt: pr.updatedAt,
+    refs: pr.closingIssuesReferences.nodes.map((n) => ({
+      repo: n.repository.nameWithOwner,
+      number: n.number,
+      state: n.state,
+    })),
+  };
 }
+const closingRefs = async (...args) => (await closingRead(...args)).refs;
 
 const sameRefs = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const byKey = (refs) => [...refs].sort((x, y) => `${x.repo}#${x.number}`.localeCompare(`${y.repo}#${y.number}`));
@@ -189,14 +196,14 @@ async function run({ github, context, core, sleep, pauseMs, now = Date.now }) {
     core.info(`PR lint skipped: ${why}`);
     return { exempt: true, why, problems: [] };
   }
-  // Let GitHub finish applying the edit that triggered this run before the
-  // first read, so a settled answer cannot be an old one.
+  // Let GitHub finish applying the latest edit before settling, so a settled
+  // answer cannot be an old one: the later of the event's time and the live
+  // one (a re-run replays the event, but the body may have changed since).
   const wait = sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-  const updated = Date.parse(pr.updated_at);
-  if (Number.isFinite(updated)) {
-    const left = updated + LAG_MS - now();
-    if (left > 0) await wait(left);
-  }
+  const live = await closingRead(github, context.repo.owner, context.repo.repo, pr.number);
+  const updated = Math.max(Date.parse(pr.updated_at) || 0, Date.parse(live.updatedAt) || 0);
+  const left = updated + LAG_MS - now();
+  if (left > 0) await wait(left);
   const refs = await settledRefs(github, context.repo.owner, context.repo.repo, pr.number, { sleep, pauseMs });
   const result = lint({ headRef: pr.head && pr.head.ref, refs, repo, author, labels });
   if (result.problems.length > 0) {
@@ -207,4 +214,4 @@ async function run({ github, context, core, sleep, pauseMs, now = Date.now }) {
   return result;
 }
 
-module.exports = { run, lint, closingRefs, settledRefs, isExempt, describe, TYPES, BRANCH_RE, EXEMPT_AUTHORS, EXEMPT_LABELS, CLOSING_QUERY };
+module.exports = { run, lint, closingRead, closingRefs, settledRefs, isExempt, describe, TYPES, BRANCH_RE, EXEMPT_AUTHORS, EXEMPT_LABELS, CLOSING_QUERY };
