@@ -65,7 +65,7 @@ const EXEMPT_LABELS = ['autorelease: pending'];
 //
 // This is an approximation of CommonMark's container rules, checked against
 // markdown-it on 6,000 generated bodies: no disagreement without nesting,
-// 1 where two of blockquote/list/fence nest, 30 where all three do (lists
+// 1 where two of blockquote/list/fence nest, 29 where all three do (lists
 // inside quotes holding fences). That is out of scope for
 // a PR-body convention check — the consequence is a closing keyword counted,
 // or not, when GitHub would do the opposite, and the issue is then closed by
@@ -91,11 +91,13 @@ function unquote(line, max = Infinity) {
   let col = 0;
   let depth = 0;
   let carry = 0;
+  let first = -1; // column of the first `>`
   while (depth < max) {
     let j = i;
     let c = col;
     for (let k = 0; k < 3 && line[j] === ' '; k++) { j++; c++; }
     if (line[j] !== '>') break;
+    if (first < 0) first = c;
     j++; c++; depth++;
     carry = 0;
     if (line[j] === ' ') { j++; c++; }
@@ -103,7 +105,7 @@ function unquote(line, max = Infinity) {
     i = j;
     col = c;
   }
-  return { depth, body: ' '.repeat(carry) + line.slice(i), start: col };
+  return { depth, body: ' '.repeat(carry) + line.slice(i), start: col, first };
 }
 const HEADING_RE = /^#{1,6}(?:[ \t]|$)/;
 const BREAK_RE = /^(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})$/;
@@ -115,11 +117,22 @@ function stripBlocks(text) {
   let indented = false; // inside an indented code block
   let items = []; // content columns of the open list items, outermost first
   let prevDepth = 0;
+  let outer = []; // the list items around a quote, saved when it opened
   const top = () => (items.length ? items[items.length - 1] : 0);
   for (const line of text.split('\n')) {
-    const { depth, body, start } = unquote(line);
-    if (depth > prevDepth) { para = false; indented = false; items = []; }
-    else if (depth < prevDepth && !para) { indented = false; items = []; }
+    const { depth, body, start, first } = unquote(line);
+    if (depth > prevDepth) {
+      // a quote opened inside a list item keeps that item for after the quote;
+      // one opened left of an item's content column ends the item
+      if (prevDepth === 0) outer = items.filter((c) => c <= first);
+      para = false; indented = false; items = [];
+    } else if (depth < prevDepth && (!para || body.trim() === '')) {
+      // a quote ends on a line with fewer markers, unless it lazily continues
+      // the quote's paragraph; a blank line always ends it
+      indented = false;
+      items = depth === 0 ? outer : [];
+      if (depth === 0) outer = [];
+    }
     prevDepth = depth;
     if (fence) {
       const u = unquote(line, fence.depth);

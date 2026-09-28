@@ -109,6 +109,9 @@ test('a closing keyword inside an HTML comment, a fenced block or inline code do
   assert.deepEqual(numbers('> \tCloses #62'), [62]); // space padding, then a tab to column 4: 2 columns of indent
   // an invalid backtick fence (backtick in the info string) is paragraph text: it continues the item, the list stays open
   assert.deepEqual(numbers('- item\n```bad`\n\n    Closes #63'), [63]);
+  // a quote inside a list item: after the quote, the item's content column applies again
+  assert.deepEqual(numbers('- item\n  > quote\n\n    Closes #64'), [64]);
+  assert.deepEqual(numbers('- item\n> quote\n\n    Closes #65'), []); // quote at column 0 ends the list: top-level code
 });
 
 test('all GitHub closing keywords, the colon form and the full URL form are recognised, case-insensitively', () => {
