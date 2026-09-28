@@ -53,7 +53,7 @@ Repositories created from a template share no git history with it, so updates ar
    `git tag vX.Y.Z <sha>`.
 
 3. Cherry-pick what you want by path. Good candidates: `skills/`, `.github/workflows/` (the labeler workflow only calls code that lives elsewhere — take them together with `scripts/issue-labeler.js`, `scripts/pr-lint.js`, their `*.test.js`, `scripts/check-node-tests.sh`, `scripts/check-label-forms.sh` and the two `check:` lines in the Makefile; `make check` fails if a workflow requires a `scripts/*.js` that is not there; if you graft the `Lint the pull request` step into a customized `ci.yml` instead of taking the file, take the `ci` job's `permissions:` block too — `issues: read` and `pull-requests: read` are what let the lint read the linked issue on a private repository), `scripts/check-*.sh` (rarely customized locally). Careful candidates: `Makefile` (your `test` target lives there), `.github/labels.yml` (your renamed `area:*` labels), `AGENTS.md` (your conventions).
-4. Apply as a normal PR through your own CI. Never bulk-overwrite customized files — `docs/template-drift.md`, if you keep one (AGENTS.md says when), is the list of what to preserve.
+4. Apply as a normal PR through your own CI. Never bulk-overwrite customized files — see the drift-file rule in [AGENTS.md](../../AGENTS.md#build-and-validation).
 5. Re-run `scripts/bootstrap.sh` if the update changed `labels.yml` or the ruleset — it syncs GitHub-side state to the files.
 
 ## What never gets pulled
