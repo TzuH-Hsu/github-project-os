@@ -74,11 +74,11 @@ genuinely ambiguous about what a client is receiving, and a client's counsel
 reads `LICENSE` and nothing else. `NOTICE` is also where licence scanners look,
 which matters when a client runs an open-source audit on delivery.
 
-For the same reason the scripts that come with the template (the ones in
-`scripts/` when you created the repository) start with
-`SPDX-License-Identifier: MIT`. They stay MIT inside a relicensed repository,
-so leave that header as it is. Files you add, in `scripts/` or anywhere else,
-carry your own licence. If your conventions require your licence header on
+For the same reason the scripts that come from the template start with
+`SPDX-License-Identifier: MIT` — the ones present when you created the
+repository and any you later take from an upstream release. They stay MIT
+inside a relicensed repository, so leave that header as it is. Files you
+write yourself, in `scripts/` or anywhere else, carry your own licence. If your conventions require your licence header on
 every source file, write the exception into that rule: a list of deliberate
 differences from the template cannot override a rule that says "every file".
 
