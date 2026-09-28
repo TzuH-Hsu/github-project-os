@@ -23,10 +23,12 @@
 // earlier version parsed the body itself; nine review rounds of CommonMark
 // corner cases later, it still could not match GitHub (#104).
 //
-// The field is updated a few seconds after a body edit (measured: 1-9 s), so
-// run() reads it until two reads 5 s apart agree, up to a bound. Because it
-// reads live state rather than the event payload, "Re-run jobs" on a failed
-// lint re-checks the current body.
+// The field is updated a few seconds after a body edit (measured: 1-9 s). So
+// run() first waits until the PR's last update (`updated_at` in the event) is
+// at least 15 s old — two equal reads inside the lag window could both be
+// stale — then reads until two reads 5 s apart agree, up to a bound. Because
+// it reads live state rather than the event payload, "Re-run jobs" on a
+// failed lint re-checks the current body.
 
 // The Conventional Commit types AGENTS.md lists (its "Branch" step is the one
 // home for this list; pr-lint.test.js asserts the two are equal). The branch
@@ -161,8 +163,10 @@ async function settledRefs(github, owner, repo, number, { reads = 5, pauseMs = 5
   return prev;
 }
 
-// Entry point for actions/github-script. `sleep` and `pauseMs` are for tests.
-async function run({ github, context, core, sleep, pauseMs }) {
+const LAG_MS = 15000; // longest measured lag was 9 s
+
+// Entry point for actions/github-script. `sleep`, `pauseMs` and `now` are for tests.
+async function run({ github, context, core, sleep, pauseMs, now = Date.now }) {
   const pr = context.payload.pull_request;
   if (!pr) {
     core.info('not a pull_request event — nothing to lint');
@@ -181,6 +185,14 @@ async function run({ github, context, core, sleep, pauseMs }) {
   if (why) {
     core.info(`PR lint skipped: ${why}`);
     return { exempt: true, why, problems: [] };
+  }
+  // Let GitHub finish applying the edit that triggered this run before the
+  // first read, so a settled answer cannot be an old one.
+  const wait = sleep || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const updated = Date.parse(pr.updated_at);
+  if (Number.isFinite(updated)) {
+    const left = updated + LAG_MS - now();
+    if (left > 0) await wait(left);
   }
   const refs = await settledRefs(github, context.repo.owner, context.repo.repo, pr.number, { sleep, pauseMs });
   const result = lint({ headRef: pr.head && pr.head.ref, refs, repo, author, labels });

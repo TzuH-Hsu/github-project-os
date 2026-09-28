@@ -136,6 +136,18 @@ test('run: passes with an info line, asks GitHub about the right PR', async () =
   assert.deepEqual(calls[0], { owner: 'o', repo: 'r', number: 7 });
 });
 
+test('run: waits until the triggering edit is 15 s old before the first read, and not when it already is', async () => {
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  const { github } = graphqlStub([[{ number: 42 }]]);
+  const t0 = Date.parse('2026-09-29T10:00:00Z');
+  await run({ github, context: ctx({ updated_at: '2026-09-29T10:00:00Z' }), core: coreSpy().core, sleep, now: () => t0 + 4000 });
+  assert.equal(waits[0], 11000); // 15 s after the edit, minus the 4 s already gone
+  waits.length = 0;
+  await run({ github, context: ctx({ updated_at: '2026-09-29T10:00:00Z' }), core: coreSpy().core, sleep, now: () => t0 + 60000 });
+  assert.equal(waits[0], 5000); // only the settle pause between the two reads
+});
+
 test('run: fails with every problem listed', async () => {
   const { github } = graphqlStub([[]]);
   const { out, core } = coreSpy();
