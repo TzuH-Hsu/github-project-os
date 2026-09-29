@@ -18,6 +18,8 @@ Agent-specific entry files (`CLAUDE.md`, `GEMINI.md`, `.github/copilot-instructi
 
 The Makefile is the only executable contract in this repository. CI calls make targets; customize the Makefile, never the workflows. Two exceptions, neither of which puts adopter values in the YAML: runner selection, which GitHub resolves before any make target exists to be called — set the `RUNNER_LABELS` repository variable instead of editing `runs-on` (see `docs/setup/runners.md`); and event handlers that need the token or payload, whose logic lives in `scripts/*.js` behind a thin `github-script` caller and is tested by `make check` (the issue labeler, the PR lint; ADR-0008).
 
+If this repository deliberately differs from the template it was created from, record each difference in `docs/template-drift.md` — the file, what differs, why — and update it in the PR that adds or removes one. A template sync preserves what that list names. (The template itself has no such file.)
+
 | Level | Name | Command | When required |
 | --- | --- | --- | --- |
 | L0 | static | `make lint` | every PR |
