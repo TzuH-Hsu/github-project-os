@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.0](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.8...v0.6.0) (2026-09-29)
+
+
+### Features
+
+* check-tool-versions reads adopter-owned pins from an optional scripts/tool-pins.extra ([#112](https://github.com/TzuH-Hsu/github-project-os/issues/112)) ([5e37f0b](https://github.com/TzuH-Hsu/github-project-os/commit/5e37f0bdc6da82297a3ac4be3e19c1bd5a8f65bc))
+* pr-lint asks GitHub which issues a PR closes instead of parsing Markdown ([#113](https://github.com/TzuH-Hsu/github-project-os/issues/113)) ([02b4138](https://github.com/TzuH-Hsu/github-project-os/commit/02b41385410ba0db355fb97192db396d3fe6e896))
+
 ## [0.5.8](https://github.com/TzuH-Hsu/github-project-os/compare/v0.5.7...v0.5.8) (2026-09-28)
 
 
