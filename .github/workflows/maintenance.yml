@@ -38,10 +38,23 @@ jobs:
           # token stays out of .git/config.
           persist-credentials: false
 
+      # The release assets ci.yml saved (see its "Restore CI tool downloads"
+      # step; same path and exact key), so a release-download outage does not
+      # fail this job either; lychee is still checked against its sha256 pin.
+      # Restore only: this job installs lychee alone, and a save here would
+      # store an entry without the other tools under ci.yml's key.
+      - name: Restore CI tool downloads
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-tools-cache
+          key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/install-*.sh', 'scripts/tool-*') }}
+
       # Shares scripts/install-ci-tools.sh with ci.yml, so the lychee version
-      # pin and checksum verification exist in exactly one place. This step was
-      # previously ~40 lines of shell duplicated verbatim from ci.yml.
+      # and sha256 pins exist in exactly one place. This step was previously
+      # ~40 lines of shell duplicated verbatim from ci.yml.
       - name: Install lychee
+        env:
+          CI_TOOLS_CACHE_DIR: ${{ runner.temp }}/ci-tools-cache
         run: make ci-tools TOOLS="lychee"
 
       # `make maintenance` runs both weekly drift detectors — the external link

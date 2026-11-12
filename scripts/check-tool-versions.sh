@@ -238,6 +238,7 @@ fi
 if [ "$drift" -gt 0 ]; then
   echo "FAIL: ${drift} tool pin(s) behind upstream." >&2
   echo "      Bump the pin in ${PINS_FILE} (or ${EXTRA_PINS_FILE}), run 'make verify', open a PR." >&2
+  echo "      A tarball tool in ${PINS_FILE} also has a <TOOL>_SHA256 pin: bump it in the same PR." >&2
   echo "      To knowingly stay behind, add a hold_reason entry in this script." >&2
   exit 1
 fi

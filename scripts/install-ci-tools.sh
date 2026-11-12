@@ -11,8 +11,8 @@
 # Usage: scripts/install-ci-tools.sh <tool> [<tool>...]
 #        make ci-tools TOOLS="actionlint gitleaks lychee"
 #
-# Known tools: actionlint, gitleaks, lychee (GitHub release tarballs, sha256
-# verified), markdownlint-cli2 (npm), yamllint (PyPI).
+# Known tools: actionlint, gitleaks, lychee (GitHub release tarballs, verified
+# against the sha256 pins below), markdownlint-cli2 (npm), yamllint (PyPI).
 #
 # All five version pins live here so `make check-tool-versions` has one place to
 # read and compare against upstream — Dependabot cannot see any of them.
@@ -27,6 +27,9 @@
 # (pipx/pip): those install into their own package-manager prefixes, which is
 # what CI needs so `make ci-pr` finds them on PATH. Each tool prints its real
 # destination, so the output never claims a directory it did not write to.
+#
+# CI_TOOLS_CACHE_DIR (unset by default) keeps the downloaded release assets of
+# the tarball tools between runs; see "downloads and the download cache" below.
 #
 # bash 3.2 portable (macOS default /bin/bash), matching scripts/bootstrap.sh:
 # no associative arrays, no mapfile, no arrays-of-arrays.
@@ -49,6 +52,19 @@ GITLEAKS_VERSION="8.30.1"
 LYCHEE_VERSION="0.24.2"
 MARKDOWNLINT_CLI2_VERSION="0.23.3"
 YAMLLINT_VERSION="1.38.0"
+
+# sha256 of the linux x86_64 release asset of each tarball tool, at the version
+# pinned above. Every install is verified against these, whether the asset was
+# downloaded or restored from the download cache; the release's own checksum
+# file is not fetched at install time, so neither whoever can write a cache
+# entry nor an outage of the release host can stand in for it. Bump a
+# <TOOL>_VERSION and its <TOOL>_SHA256 together: take the asset's line from the
+# release's checksum file (an install whose asset does not match prints that
+# file's URL) and check that the release is the one you meant. Same shape as
+# the version pins: one per line, double-quoted.
+ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+GITLEAKS_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+LYCHEE_SHA256="1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a"
 
 # --- preflight --------------------------------------------------------------
 # The three tarball tools ship linux x86_64 assets only, which is correct for the
@@ -75,16 +91,12 @@ require_supported_platform() {
   fi
 }
 
-# --- helpers (moved verbatim from ci.yml / maintenance.yml) ------------------
-verify_checksum() {
-  local asset="$1" checksums="$2" line hash
-  line="$(grep -F "$asset" "$checksums" || true)"
-  if [ -z "$line" ]; then
-    line="$(head -n 1 "$checksums")"
-  fi
-  hash="$(printf '%s\n' "$line" | grep -Eo '[A-Fa-f0-9]{64}' | head -n 1)"
-  test -n "$hash"
-  printf '%s  %s\n' "$hash" "$asset" | sha256sum -c -
+# --- helpers ------------------------------------------------------------------
+# verify_pinned <file> <sha256>: the file must hash to the pinned value. The
+# expected value comes from the pins above, never from a file fetched or cached
+# alongside the asset.
+verify_pinned() {
+  printf '%s  %s\n' "$2" "$1" | sha256sum -c -
 }
 
 place_binary() {
@@ -97,12 +109,64 @@ place_binary() {
   fi
 }
 
-install_tar_binary() {
-  local repo="$1" tag="$2" asset="$3" checksums="$4" binary="$5"
+# --- downloads and the download cache ---------------------------------------
+# GitHub's release downloads intermittently fail with a 5xx, sometimes for
+# hours. Every download retries, so one dropped connection or a short spell of
+# errors does not fail the whole CI job; --retry-all-errors also retries errors
+# plain --retry treats as final (connection refused, for one). Five retries
+# DOWNLOAD_RETRY_DELAY_S apart ride out a blip of about a minute; a longer
+# outage is what the cache below is for.
+DOWNLOAD_RETRIES=5
+DOWNLOAD_RETRY_DELAY_S=10
+
+download() {
+  # download <url> <output-file>
+  curl -fsSL --retry "$DOWNLOAD_RETRIES" --retry-all-errors \
+    --retry-delay "$DOWNLOAD_RETRY_DELAY_S" --connect-timeout 30 --max-time 300 \
+    -o "$2" "$1"
+}
+
+# CI_TOOLS_CACHE_DIR (unset by default) is a directory that keeps release
+# assets between runs; ci.yml restores and saves it with actions/cache. It
+# holds <owner>/<repo>/<tag>/<asset> and nothing else: no checksum files. A
+# cached asset is verified against its pin before use; one that does not match
+# is deleted and downloaded again, and the download must match the pin too.
+# Only an asset that matched is stored, and storing a tag drops the other tags
+# of that repository, so the cache holds one version per tool.
+fetch_release_asset() {
+  # fetch_release_asset <owner/repo> <tag> <asset> <sha256> <checksum-file-name>
+  local repo="$1" tag="$2" asset="$3" sha256="$4" checksums="$5"
   local url="https://github.com/${repo}/releases/download/${tag}"
-  curl -fsSLO "$url/$asset"
-  curl -fsSLO "$url/$checksums"
-  verify_checksum "$asset" "$checksums"
+  local cached=""
+  if [ -n "${CI_TOOLS_CACHE_DIR:-}" ]; then
+    cached="${CI_TOOLS_CACHE_DIR}/${repo}/${tag}"
+  fi
+  if [ -n "$cached" ] && [ -f "$cached/$asset" ]; then
+    cp "$cached/$asset" .
+    if verify_pinned "$asset" "$sha256"; then
+      echo "${asset}: from the cache (${cached}), not downloaded"
+      return 0
+    fi
+    echo "::warning::cached ${asset} does not match its pinned sha256; deleting it and downloading again" >&2
+    rm -f "$asset" "$cached/$asset"
+  fi
+  download "$url/$asset" "$asset"
+  if ! verify_pinned "$asset" "$sha256"; then
+    echo "::error::${asset} from ${url} does not match its pinned sha256 (${sha256})." >&2
+    echo "       If its version pin was just bumped, update the sha256 pin from ${url}/${checksums}" >&2
+    exit 1
+  fi
+  if [ -n "$cached" ]; then
+    rm -rf "${CI_TOOLS_CACHE_DIR:?}/${repo}"
+    mkdir -p "$cached"
+    cp "$asset" "$cached/"
+  fi
+}
+
+install_tar_binary() {
+  # install_tar_binary <owner/repo> <tag> <asset> <checksum-file-name> <binary> <sha256>
+  local repo="$1" tag="$2" asset="$3" checksums="$4" binary="$5" sha256="$6"
+  fetch_release_asset "$repo" "$tag" "$asset" "$sha256" "$checksums"
   local extract_dir="${tmp}/extract-${binary}"
   mkdir -p "$extract_dir"
   tar -xzf "$asset" -C "$extract_dir"
@@ -170,21 +234,21 @@ install_tool() {
       install_tar_binary "rhysd/actionlint" "v${ACTIONLINT_VERSION}" \
         "actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
         "actionlint_${ACTIONLINT_VERSION}_checksums.txt" \
-        "actionlint"
+        "actionlint" "${ACTIONLINT_SHA256}"
       ;;
     gitleaks)
       require_supported_platform gitleaks
       install_tar_binary "gitleaks/gitleaks" "v${GITLEAKS_VERSION}" \
         "gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
         "gitleaks_${GITLEAKS_VERSION}_checksums.txt" \
-        "gitleaks"
+        "gitleaks" "${GITLEAKS_SHA256}"
       ;;
     lychee)
       require_supported_platform lychee
       install_tar_binary "lycheeverse/lychee" "lychee-v${LYCHEE_VERSION}" \
         "lychee-x86_64-unknown-linux-gnu.tar.gz" \
         "lychee-x86_64-unknown-linux-gnu.tar.gz.sha256" \
-        "lychee"
+        "lychee" "${LYCHEE_SHA256}"
       ;;
     markdownlint-cli2)
       require_install_consent markdownlint-cli2
@@ -231,6 +295,13 @@ for tool in "$@"; do
       ;;
   esac
 done
+
+# The downloads run inside $tmp, so a relative cache directory is resolved
+# against the caller's directory first.
+if [ -n "${CI_TOOLS_CACHE_DIR:-}" ]; then
+  mkdir -p "$CI_TOOLS_CACHE_DIR"
+  CI_TOOLS_CACHE_DIR="$(cd "$CI_TOOLS_CACHE_DIR" && pwd)"
+fi
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT

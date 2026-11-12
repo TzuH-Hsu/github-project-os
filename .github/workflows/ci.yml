@@ -125,13 +125,43 @@ jobs:
         with:
           node-version: lts/*
 
-      # Every tool version pin, plus the checksum verification, lives in
-      # scripts/install-ci-tools.sh (shared with maintenance.yml) so that
-      # `make check-tool-versions` has a single place to diff against upstream.
-      # This was three separate steps, one of them ~40 lines of shell duplicated
-      # verbatim in maintenance.yml.
+      # The release assets `make ci-tools` downloaded in an earlier run
+      # (actionlint, gitleaks, lychee), so an outage of GitHub's release
+      # downloads does not fail every pull request. The cache holds the assets
+      # only, no checksum files: the installer checks every asset, cached or
+      # downloaded, against the sha256 pinned in scripts/install-ci-tools.sh,
+      # and deletes and downloads again a cached one that does not match. The
+      # key hashes every scripts/install-*.sh and scripts/tool-* file, where
+      # the version and sha256 pins live (an adopter's own installer and pin
+      # files included), and only that exact key is restored (no
+      # restore-keys), so a pin change starts a new entry. The npm and PyPI
+      # tools are not cached. A pull request's saves are readable by that pull
+      # request only; a push to main saves for every branch.
+      - name: Restore CI tool downloads
+        id: ci-tools-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-tools-cache
+          key: ci-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/install-*.sh', 'scripts/tool-*') }}
+
+      # Every tool version and sha256 pin lives in scripts/install-ci-tools.sh
+      # (shared with maintenance.yml) so that `make check-tool-versions` has a
+      # single place to diff against upstream. This was three separate steps,
+      # one of them ~40 lines of shell duplicated verbatim in maintenance.yml.
       - name: Install CI tools
+        env:
+          CI_TOOLS_CACHE_DIR: ${{ runner.temp }}/ci-tools-cache
         run: make ci-tools TOOLS="markdownlint-cli2 yamllint actionlint gitleaks lychee"
+
+      # Saved straight after the install rather than at the end of the job,
+      # so a run that fails in a later step still leaves its downloads for
+      # the next one. Skipped when the exact key was restored.
+      - name: Save CI tool downloads
+        if: steps.ci-tools-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/ci-tools-cache
+          key: ${{ steps.ci-tools-cache.outputs.cache-primary-key }}
 
       - name: Run CI
         run: make ci-pr
