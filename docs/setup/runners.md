@@ -69,13 +69,49 @@ you rely on it.
 ## Hard constraint: linux x86_64 only
 
 `scripts/install-ci-tools.sh` installs actionlint, gitleaks and lychee as
-checksum-verified `linux_amd64` tarballs, and `require_supported_platform`
+`linux_amd64` tarballs verified against pinned sha256s, and `require_supported_platform`
 hard-fails on anything else. Point `RUNNER_LABELS` at `macos-latest` or an arm64
 runner and `make ci-tools` fails at runtime with a message about `uname -m`,
 which reads like a broken script rather than a misconfigured variable.
 
 Supporting other architectures means adding per-tool asset names to that script,
 not relaxing the guard.
+
+## Download cache for the CI tools
+
+GitHub's release downloads intermittently fail with a 5xx, sometimes for hours,
+and every pull request's `ci` job downloads its tools from there. So `ci.yml`
+keeps the release assets of the three tarball tools in an `actions/cache` entry
+(path `${{ runner.temp }}/ci-tools-cache`, passed to `make ci-tools` as
+`CI_TOOLS_CACHE_DIR`), and every download retries five times, ten seconds
+apart. The retries ride out a blip; the cache covers a longer outage once a
+run has saved an entry.
+
+Every asset, cached or downloaded, is checked against the `<TOOL>_SHA256` pin
+next to its version pin in `scripts/install-ci-tools.sh`. The cache holds no
+checksum files and the installer never fetches one, so whoever can write a
+cache entry still cannot change what gets installed. A cached asset that does
+not match is deleted and downloaded again; a download that does not match fails
+the step and prints the URL of the release's checksum file to take a new pin
+from. Bumping a tarball tool therefore means changing its version and its
+sha256 pin in the same pull request.
+
+The key is the runner's OS and architecture plus a hash of every
+`scripts/install-*.sh` and `scripts/tool-*` file, and only that exact key is
+restored, so a pin change starts a new entry. An adopter's own installer for
+tools the template does not ship can use the same `CI_TOOLS_CACHE_DIR` (layout
+`<owner>/<repo>/<tag>/<asset>`); naming it `scripts/install-*.sh` and its pin
+files `scripts/tool-*` keeps them in the key. If a pin lives anywhere else (a
+Dockerfile, say), add that file to the `hashFiles` list in both workflows.
+`maintenance.yml` restores the same entry and saves nothing.
+
+The entry lives in the repository's Actions cache, which GitHub evicts on its
+own; it adds nothing to the runner. Because the path includes `runner.temp`,
+runners whose work directory differs do not share an entry: each downloads
+once and saves its own. A pull request's save is readable by that pull request
+only; a push to `main` saves an entry every branch can read. The npm and PyPI
+tools (markdownlint-cli2, yamllint) are not cached: their registries are not
+GitHub's release downloads, and npm and pip retry on their own.
 
 ## Self-hosted runners: do not use them on a public repository
 

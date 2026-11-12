@@ -24,7 +24,7 @@ Workflows are the highest-privilege, least-reviewed code in most repositories �
 5. **`timeout-minutes` on every job**, always. An unbounded job is an unbounded bill and an unbounded hang.
 6. **Never interpolate untrusted `${{ }}` expressions directly into `run:`.** Issue titles, PR titles, branch names, and commit messages are attacker-controlled strings — interpolating them into a shell step is a script-injection vector. Pass them through `env:` and reference the env var instead.
 7. **Destructive or irreversible dispatch workflows require a typed-confirmation guard** — the operator must type an exact phrase (e.g. the repo name) as a `workflow_dispatch` input, checked before anything destructive runs.
-8. **Checksum-verify any binary downloaded and installed in a workflow** (release tools, linters) — download the checksums file alongside the asset and verify before `chmod +x` / `install`.
+8. **Checksum-verify any binary downloaded and installed in a workflow** (release tools, linters) against a sha256 pinned in the repository, next to its version pin, before `chmod +x` / `install`. Do not trust a checksum file fetched at install time: it comes from the same place as the asset, and if the asset is cached, whoever can write the cache can write a matching checksum file too. Retry every download and cache the verified assets (`actions/cache`, exact key only), so an outage of the release host does not fail every pull request.
 9. **Anti-sprawl**: a new workflow file needs a justification that no existing workflow already covers. This template's target set is four: CI (verification), issue labeling, link maintenance, release PRs. Adding a fifth is a deliberate decision, not a default — prefer adding a job or a `make` target to an existing workflow first.
 10. **Every pinned tool version lives in one file, and something watches it.** SHA-pinning actions (rule 3) only covers `uses:`. Dependabot reads manifests, so a version pinned inside a `run:` step or an install script is invisible to it and will rot silently — no alert, no PR, no signal at all. Keep those pins in a single file (`scripts/install-ci-tools.sh` here) and run a scheduled check that diffs them against upstream (`make check-tool-versions`, a step in the weekly maintenance workflow). A pin nobody is watching is a pin that stays put for years. Tools the template does not ship go in the optional `scripts/tool-pins.extra` (`<tool> <version> github:<owner>/<repo>|npm:<pkg>|pypi:<pkg>`), which the same check reads — so adding one edits neither kit script.
 
@@ -61,16 +61,22 @@ jobs:
             echo "Confirmation phrase did not match. Aborting."; exit 1; }
 ```
 
-Checksum verification, adapted from `scripts/install-ci-tools.sh` (which both
-`ci.yml` and `maintenance.yml` reach via `make ci-tools` — this logic used to be
-duplicated verbatim inside each workflow, which is what rule 1 prevents):
+Checksum verification against a pin, adapted from `scripts/install-ci-tools.sh`
+(which both `ci.yml` and `maintenance.yml` reach via `make ci-tools` — this
+logic used to be duplicated verbatim inside each workflow, which is what rule 1
+prevents). The expected value is a constant in the repository, never a line
+read from a downloaded or cached file:
 
 ```bash
-verify_checksum() {
-  local asset="$1" checksums="$2" hash
-  hash="$(grep -F "$asset" "$checksums" | grep -Eo '[A-Fa-f0-9]{64}' | head -n1)"
-  printf '%s  %s\n' "$hash" "$asset" | sha256sum -c -
+ACTIONLINT_SHA256="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+
+verify_pinned() {
+  # verify_pinned <file> <sha256>
+  printf '%s  %s\n' "$2" "$1" | sha256sum -c -
 }
+
+curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$asset" "$url/$asset"
+verify_pinned "$asset" "$ACTIONLINT_SHA256"
 ```
 
 ## Pitfalls
@@ -86,7 +92,7 @@ verify_checksum() {
 - `` `.github/workflows/ci.yml` `` — reference implementation of pinned actions, top-level `permissions: read`, concurrency group, `timeout-minutes`, and `persist-credentials: false`; also carries the header warning explaining why its `on:` block must never gain a path filter (the `ci` job is the only required status check)
 - `Makefile` — where workflow logic lives (`lint`, `test`, `verify`, `ci-pr`, `ci-tools`), except the event handlers in `scripts/issue-labeler.js` and `scripts/pr-lint.js` (rule 1, ADR-0008)
 - `` `scripts/issue-labeler.js` ``, `` `scripts/pr-lint.js` `` / `` `scripts/check-node-tests.sh` `` — the event handlers and the `make check` step that tests them
-- `` `scripts/install-ci-tools.sh` `` — checksum-verified tool installs and the single home for all five CI tool version pins, shared by `ci.yml` and `maintenance.yml`
+- `` `scripts/install-ci-tools.sh` `` — tool installs verified against pinned sha256s, with retried downloads and an optional download cache (`CI_TOOLS_CACHE_DIR`); the single home for all five CI tool version pins, shared by `ci.yml` and `maintenance.yml`
 - `` `scripts/check-tool-versions.sh` `` — rule 10's watcher: diffs those pins against upstream weekly and fails on drift
 - `AGENTS.md` — "The Makefile is the only executable contract in this repository"
 - `` `skills/validation-ladder/SKILL.md` `` — what `make lint`/`make test` are expected to cover
